@@ -141,9 +141,11 @@
   <ItemGroup>
     <ClCompile Include="Context.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="GraphicsPipeline.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Context.h" />
+    <ClInclude Include="GraphicsPipeline.h" />
     <ClInclude Include="vk.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

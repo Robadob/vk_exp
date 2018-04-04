@@ -15,6 +15,12 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugLayerCallback(
 	const char* msg,
 	void* userData);
 #endif
+/**
+ * TODO
+ * Add support for Debug Markers
+ * https://vulkan.lunarg.com/doc/sdk/1.0.26.0/windows/debug_marker.html
+ * Improve device/surface selection intelligence (see method level comments)
+ */
 class Context
 {
 	bool isInit = false;
@@ -28,8 +34,10 @@ class Context
 	vk::Semaphore m_imageAvailableSemaphore = nullptr;
 	vk::Semaphore m_renderingFinishedSemaphore = nullptr;
 	vk::Extent2D m_swapchainDims;
+	vk::SurfaceFormatKHR m_surfaceFormat;
 	vk::SwapchainKHR m_swapchain = nullptr;
 	std::vector<vk::Image> m_scImages;
+	std::vector<vk::ImageView>m_scImageViews;
 	vk::CommandPool m_commandPool = nullptr;
 	std::vector<vk::CommandBuffer> m_commandBuffers;
 	std::vector<vk::Fence> m_fences;
@@ -39,6 +47,9 @@ class Context
 public:
 	void init(unsigned int width = 1280, unsigned int height = 720, const char * title = "vk_exp");
 	void destroy();
+	const vk::Device &Device() const { return m_device; }
+	const vk::Extent2D &SurfaceDims() const { return m_swapchainDims; }
+	const vk::SurfaceFormatKHR &SurfaceFormat() const { return m_surfaceFormat; }
 private:
 	/**
 	 * Creation utility
@@ -52,14 +63,27 @@ private:
 	void createWindow(unsigned int width, unsigned int height, const char *title);
 	void createInstance(const char * title);
 	void createSurface();
+	/**
+	 * This could be improved to score devices better
+	 * and confirm externally passed vk::PhysicalDeviceFeature requirements
+	 */
 	std::pair<unsigned int, unsigned int> selectPhysicalDevice();
+	/**
+	 * This should be improved to pass external vk::PhysicalDeviceFeature requirements
+	 */
 	void createLogicalDevice(unsigned int graphicsQIndex);
+	/**
+	 * Could improve selection of swap surface
+	 */
 	void createSwapchain();
+	void createSwapchainImages();
 	void createCommandPool(unsigned int graphicsQIndex);
 	void createFences();
+	void createGraphicsPipeline();
 	//Destroy
 	void destroyFences();
 	void destroyCommandPool();
+	void destroySwapChainImages();
 	void destroySwapChain();
 	void destroyLogicalDevice();
 	void destroySurface();

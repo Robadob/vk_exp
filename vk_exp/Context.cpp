@@ -31,10 +31,13 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		m_renderingFinishedSemaphore = m_device.createSemaphore({});
 		//Create the swapchain for double/triple buffering (support for this isn't actually required by the spec???!)
 		createSwapchain();
+		//Create views for the swap chain images
+		createSwapchainImages();
 		//Create the command pool and buffers
 		createCommandPool(std::get<0>(qs));
 		//Create memory fences for swapchain images
 		createFences();
+		SDL_ShowWindow(m_window);
 		isInit = true;
 	}
 	catch (std::exception ex)
@@ -45,8 +48,11 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 }
 void Context::destroy()
 {
+	if(m_window)
+		SDL_HideWindow(m_window);
 	destroyFences();
 	destroyCommandPool();
+	destroySwapChainImages();
 	destroySwapChain();
 	if(m_renderingFinishedSemaphore)
 	{
@@ -169,6 +175,8 @@ void Context::createSurface()
 }
 std::pair<unsigned int, unsigned int> Context::selectPhysicalDevice()
 {
+	//Could improve this method to score available devices
+	//https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Physical_devices_and_queue_families
 	//Enumerate physical devices
 	std::vector<vk::PhysicalDevice> physicalDevices = m_instance.enumeratePhysicalDevices();
 	//Select most suitable physical device
@@ -241,15 +249,27 @@ void Context::createLogicalDevice(unsigned int graphicsQIndex)
 		1,				/*Queue Count*/
 		&priority[0]	/*Queue Priorities*/
 	);
+	/**
+	 * Enable features like geometry shaders here
+	 */
+	vk::PhysicalDeviceFeatures pdf;
+#ifdef _DEBUG
+	const std::vector<const char*> validationLayers = supportedValidationLayers();
+#endif
 	vk::DeviceCreateInfo deviceCreateInfo(
-	{}											/*Flags*/,
+		{}											/*Flags*/,
 		1,											/*Queue Info Count*/
 		&deviceQueueCreateInfo,						/*Queue Create Info*/
+#ifdef _DEBUG
+		(unsigned int)validationLayers.size(),		/*Enabled Layer Count*/
+		validationLayers.data(),					/*Enabled Layer Names*/
+#else
 		0,											/*Enabled Layer Count*/
-		nullptr,									/*Enabled Layers*/
+		nullptr,									/*Enabled Layer Names*/
+#endif
 		(unsigned int)deviceExtensionNames.size(),	/*Enabled Extension Count*/
 		deviceExtensionNames.data(),				/*Enabled Extension Names*/
-		nullptr										/*Enabled Physical Device Features*/
+		&pdf										/*Enabled Physical Device Features*/
 	);
 	m_device = m_physicalDevice.createDevice(deviceCreateInfo);
 }
@@ -271,21 +291,20 @@ void Context::createSwapchain()
 	if (swapchainDesiredImageCount > surfaceCap.maxImageCount && surfaceCap.maxImageCount > 0)
 		swapchainDesiredImageCount = surfaceCap.maxImageCount;
 	//Select a format
-	vk::SurfaceFormatKHR surfaceFormat;
 	if (surfaceFormats.size() == 1 && surfaceFormats[0].format == vk::Format::eUndefined)
 	{
 		// aren't any preferred formats, so we pick
-		surfaceFormat.colorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
-		surfaceFormat.format = vk::Format::eR8G8B8A8Unorm;
+		m_surfaceFormat.colorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
+		m_surfaceFormat.format = vk::Format::eR8G8B8A8Unorm;
 	}
 	else
 	{
-		surfaceFormat = surfaceFormats[0];
+		m_surfaceFormat = surfaceFormats[0];
 		for (auto &cf : surfaceFormats)
 		{
 			if (cf.format == vk::Format::eR8G8B8A8Unorm)
 			{
-				surfaceFormat = cf;
+				m_surfaceFormat = cf;
 				break;
 			}
 		}
@@ -300,23 +319,54 @@ void Context::createSwapchain()
 	{},
 		m_surface,
 		swapchainDesiredImageCount,
-		surfaceFormat.format,
-		surfaceFormat.colorSpace,
-		m_swapchainDims, 1,
+		m_surfaceFormat.format,
+		m_surfaceFormat.colorSpace,
+		m_swapchainDims, 
+		1, /*Layers (Always 1 unless stereo rendering)*/
 		vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
 		vk::SharingMode::eExclusive,
-		0/*?*/,
-		nullptr /*?*/,
-		surfaceCap.currentTransform,
-		vk::CompositeAlphaFlagBitsKHR::eOpaque,
-		vk::PresentModeKHR::eFifo,
-		true,
-		vk::SwapchainKHR()
+		0,								/*Queue Family Count (unnecessary for eExclusive)*/
+		nullptr,						/*Queue Family Indicies (unnecessary for eExclusive)*/
+		surfaceCap.currentTransform,	/*PreTransform*/
+		vk::CompositeAlphaFlagBitsKHR::eOpaque, /*Composite Alpha*/
+		vk::PresentModeKHR::eFifo, /*Present Mode*/
+		true, /*Clipped*/
+		vk::SwapchainKHR() /*Old Swapchain*/
 	);
 	m_swapchain = m_device.createSwapchainKHR(swapChainCreateInfo);
-	m_scImages = m_device.getSwapchainImagesKHR(m_swapchain);
-	assert(swapchainDesiredImageCount == m_scImages.size());
 }
+void Context::createSwapchainImages()
+{
+	m_scImages = m_device.getSwapchainImagesKHR(m_swapchain);
+	m_scImageViews.resize(m_scImages.size());
+	vk::ComponentMapping swizzleIdent(
+		vk::ComponentSwizzle::eIdentity, 
+		vk::ComponentSwizzle::eIdentity, 
+		vk::ComponentSwizzle::eIdentity, 
+		vk::ComponentSwizzle::eIdentity
+	);
+	vk::ImageSubresourceRange subresourceTarget(
+		vk::ImageAspectFlagBits::eColor,	/*Aspect Mask*/
+		0,									/*Base MipMap Level*/
+		1,									/*Level Count*/
+		0,									/*Base Array Layer*/
+		1									/*Layer Count*/
+	);
+	vk::ImageViewCreateInfo imgCreate(
+		{},						/*Flags*/
+		vk::Image(),			/*Image*/
+		vk::ImageViewType::e2D,	/*Image View Type*/
+		m_surfaceFormat.format,	/*Format*/
+		swizzleIdent,			/*Component Mapping*/
+		subresourceTarget		/*Subresource Range*/
+	);
+	for (size_t i = 0; i < m_scImageViews.size(); i++)
+	{
+		imgCreate.image = m_scImages[i];
+		m_scImageViews[i] = m_device.createImageView(imgCreate);
+	}
+}
+
 void Context::createCommandPool(unsigned int graphicsQIndex)
 {
 	// createCommandPool();
@@ -378,15 +428,22 @@ void Context::destroyCommandPool()
 		m_commandPool = nullptr;
 	}
 }
+void Context::destroySwapChainImages()
+{
+	for (auto &a : m_scImageViews)
+		m_device.destroyImageView(a);
+	m_scImageViews.clear();
+	m_scImages.clear();
+}
 void Context::destroySwapChain()
 {
-	m_scImages.clear();
 	if(m_swapchain)
 	{
 		m_device.destroySwapchainKHR(m_swapchain);
 		m_swapchain = nullptr;
 	}
 	m_swapchainDims = vk::Extent2D(0, 0);
+	m_surfaceFormat = vk::SurfaceFormatKHR();
 }
 void Context::destroyLogicalDevice()
 {
@@ -493,3 +550,9 @@ void Context::destroyDebugCallbacks()
 	m_debugCallback = nullptr;
 }
 #endif
+
+
+void Context::createGraphicsPipeline()
+{
+	
+}
