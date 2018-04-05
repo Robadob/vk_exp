@@ -1,7 +1,8 @@
 #include "Context.h"
 #include <sstream>
 #include <fstream>
-
+#include "GraphicsPipeline.h"
+#include <SDL/SDL_vulkan.h>
 /**
  * Public fns
  */
@@ -38,6 +39,10 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		createSwapchainImages();
 		//Create/Load pipeline cache
 		setupPipelineCache();
+		//Create GFX pipeline? (framebuffer dependent on this)
+		createGraphicsPipeline();
+		//Create Framebuffer
+		createFramebuffers();
 		//Create the command pool and buffers
 		createCommandPool(std::get<0>(qs));
 		//Create memory fences for swapchain images
@@ -57,6 +62,9 @@ void Context::destroy()
 		SDL_HideWindow(m_window);
 	destroyFences();
 	destroyCommandPool();
+	delete gfxPipeline;
+	gfxPipeline = nullptr;
+	destroyFramebuffers();
 	backupPipelineCache();
 	destroyPipelineCache();
 	destroySwapChainImages();
@@ -385,6 +393,23 @@ void Context::createSwapchainImages()
 		m_scImageViews[i] = m_device.createImageView(imgCreate);
 	}
 }
+void Context::createFramebuffers()
+{
+	m_scFramebuffers.resize(m_scImageViews.size());
+	for (size_t i = 0; i < m_scImageViews.size(); i++) {
+		vk::ImageView attachments[] = { m_scImageViews[i] };
+		auto fbCreate = vk::FramebufferCreateInfo();
+		{
+			fbCreate.renderPass = gfxPipeline->RenderPass();
+			fbCreate.attachmentCount = 1;
+			fbCreate.pAttachments = attachments;
+			fbCreate.width = m_swapchainDims.width;
+			fbCreate.height = m_swapchainDims.height;
+			fbCreate.layers = 1;
+		}
+		m_scFramebuffers[i] = m_device.createFramebuffer(fbCreate);
+	}
+}
 void Context::setupPipelineCache()
 {
 	//Generate pipeline cache filename for current device
@@ -437,7 +462,7 @@ void Context::createCommandPool(unsigned int graphicsQIndex)
 	{
 		commandBufferAllocInfo.commandPool = m_commandPool;
 		commandBufferAllocInfo.level = vk::CommandBufferLevel::ePrimary;
-		commandBufferAllocInfo.commandBufferCount = (unsigned int)m_scImages.size();
+		commandBufferAllocInfo.commandBufferCount = (unsigned int)m_scFramebuffers.size();
 	}
 	m_commandBuffers = m_device.allocateCommandBuffers(commandBufferAllocInfo);
 }
@@ -509,7 +534,14 @@ void Context::destroyPipelineCache()
 	m_device.destroyPipelineCache(m_pipelineCache);
 	m_pipelineCache = nullptr;
 }
-
+void Context::destroyFramebuffers()
+{
+	for(auto &fb : m_scFramebuffers)
+	{
+		m_device.destroyFramebuffer(fb);
+	}
+	m_scFramebuffers.clear();
+}
 void Context::destroySwapChainImages()
 {
 	for (auto &a : m_scImageViews)
@@ -633,12 +665,10 @@ void Context::destroyDebugCallbacks()
 }
 #endif
 
-
 void Context::createGraphicsPipeline()
 {
-	
+	gfxPipeline = new GraphicsPipeline(*this,"../shaders/vert.spv","../shaders/frag.spv");
 }
-
 
 std::string Context::pipelineCacheFilepath()
 {

@@ -3,7 +3,7 @@
 #include <SDL/SDL.h>
 #undef main //SDL breaks the regular main entry point, this fixes
 #include <vulkan/vulkan.hpp>
-#include <SDL/SDL_vulkan.h>
+class GraphicsPipeline;
 #ifdef _DEBUG
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugLayerCallback(
 	VkDebugReportFlagsEXT flags,
@@ -38,10 +38,13 @@ class Context
 	vk::SwapchainKHR m_swapchain = nullptr;
 	std::vector<vk::Image> m_scImages;
 	std::vector<vk::ImageView> m_scImageViews;
+	std::vector<vk::Framebuffer> m_scFramebuffers;
 	vk::PipelineCache m_pipelineCache = nullptr;
 	vk::CommandPool m_commandPool = nullptr;
 	std::vector<vk::CommandBuffer> m_commandBuffers;
 	std::vector<vk::Fence> m_fences;
+
+	GraphicsPipeline *gfxPipeline = nullptr;
 #ifdef _DEBUG
 	vk::DebugReportCallbackEXT m_debugCallback = nullptr;
 #endif
@@ -79,6 +82,7 @@ private:
 	 */
 	void createSwapchain();
 	void createSwapchainImages();
+	void createFramebuffers();
 	void setupPipelineCache();
 	void createCommandPool(unsigned int graphicsQIndex);
 	void createFences();
@@ -88,6 +92,7 @@ private:
 	void destroyCommandPool();
 	void backupPipelineCache();
 	void destroyPipelineCache();
+	void destroyFramebuffers();
 	void destroySwapChainImages();
 	void destroySwapChain();
 	void destroyLogicalDevice();

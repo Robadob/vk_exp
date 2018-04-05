@@ -126,25 +126,25 @@ vk::PipelineInputAssemblyStateCreateInfo GraphicsPipeline::inputAssembly() const
 	return rtn;
 }
 
-vk::PipelineViewportStateCreateInfo GraphicsPipeline::viewportState() const
+vk::PipelineViewportStateCreateInfo GraphicsPipeline::viewportState()
 {
 	auto ex = m_context.SurfaceDims();
-	auto vp = vk::Viewport(
+	t_viewport = vk::Viewport(
 		0.0f, 0.0f,							/*x,y*/
 		(float)ex.width, (float)ex.height,	/*Width, Height*/
 		0.0f, 1.0f							/*Depth Min, Max*/
 	);
-	auto s = vk::Rect2D(
-	{ 0,0 },	/*Offset*/
+	t_scissors = vk::Rect2D(
+		{ 0,0 },	/*Offset*/
 		ex			/*Extent*/
 	);
 	auto rtn = vk::PipelineViewportStateCreateInfo();
 	{
 		rtn.flags = {};
 		rtn.viewportCount = 1;
-		rtn.pViewports = &vp;
+		rtn.pViewports = &t_viewport;
 		rtn.scissorCount = 1;
-		rtn.pScissors = &s;
+		rtn.pScissors = &t_scissors;
 	}
 	return rtn;
 }
@@ -182,17 +182,17 @@ vk::PipelineMultisampleStateCreateInfo GraphicsPipeline::multisampleState() cons
 	return rtn;
 }
 
-vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState() const
+vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState()
 {
-	auto cbas = vk::PipelineColorBlendAttachmentState();
+	t_cbas = vk::PipelineColorBlendAttachmentState();
 	{
-		cbas.blendEnable = false;
-		cbas.srcColorBlendFactor = vk::BlendFactor::eOne;
-		cbas.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
-		cbas.colorBlendOp = vk::BlendOp::eAdd;
-		cbas.srcAlphaBlendFactor = vk::BlendFactor::eOne;
-		cbas.dstAlphaBlendFactor = vk::BlendFactor::eZero;
-		cbas.alphaBlendOp = vk::BlendOp::eAdd;
+		t_cbas.blendEnable = false;
+		t_cbas.srcColorBlendFactor = vk::BlendFactor::eOne;
+		t_cbas.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
+		t_cbas.colorBlendOp = vk::BlendOp::eAdd;
+		t_cbas.srcAlphaBlendFactor = vk::BlendFactor::eOne;
+		t_cbas.dstAlphaBlendFactor = vk::BlendFactor::eZero;
+		t_cbas.alphaBlendOp = vk::BlendOp::eAdd;
 	}
 	auto rtn = vk::PipelineColorBlendStateCreateInfo();
 	{
@@ -200,7 +200,7 @@ vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState() const
 		rtn.logicOpEnable = false;
 		rtn.logicOp = vk::LogicOp::eCopy;
 		rtn.attachmentCount = 1;
-		rtn.pAttachments = &cbas;
+		rtn.pAttachments = &t_cbas;
 		rtn.blendConstants[0] = 0.0f;
 		rtn.blendConstants[1] = 0.0f;
 		rtn.blendConstants[2] = 0.0f;
@@ -223,12 +223,12 @@ vk::PipelineLayout GraphicsPipeline::pipelineLayout() const
 }
 vk::RenderPass GraphicsPipeline::renderPass() const
 {
-	auto attachDesc = vk::AttachmentDescription();
+	auto attachDesc = vk::AttachmentDescription();	
 	{
 		attachDesc.flags = {};
 		attachDesc.format = m_context.SurfaceFormat().format;
 		attachDesc.samples = vk::SampleCountFlagBits::e1;
-		attachDesc.loadOp = vk::AttachmentLoadOp::eLoad;
+		attachDesc.loadOp = vk::AttachmentLoadOp::eClear;
 		attachDesc.storeOp = vk::AttachmentStoreOp::eStore;
 		attachDesc.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
 		attachDesc.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
@@ -258,7 +258,7 @@ vk::RenderPass GraphicsPipeline::renderPass() const
 		rpInfo.flags = {};
 		rpInfo.attachmentCount = 1;
 		rpInfo.pAttachments = &attachDesc;
-		rpInfo.subpassCount = 0;
+		rpInfo.subpassCount = 1;
 		rpInfo.pSubpasses = &subpass;
 		rpInfo.dependencyCount = 0;
 		rpInfo.pDependencies = nullptr;
