@@ -37,7 +37,8 @@ class Context
 	vk::SurfaceFormatKHR m_surfaceFormat;
 	vk::SwapchainKHR m_swapchain = nullptr;
 	std::vector<vk::Image> m_scImages;
-	std::vector<vk::ImageView>m_scImageViews;
+	std::vector<vk::ImageView> m_scImageViews;
+	vk::PipelineCache m_pipelineCache = nullptr;
 	vk::CommandPool m_commandPool = nullptr;
 	std::vector<vk::CommandBuffer> m_commandBuffers;
 	std::vector<vk::Fence> m_fences;
@@ -50,6 +51,7 @@ public:
 	const vk::Device &Device() const { return m_device; }
 	const vk::Extent2D &SurfaceDims() const { return m_swapchainDims; }
 	const vk::SurfaceFormatKHR &SurfaceFormat() const { return m_surfaceFormat; }
+	const vk::PipelineCache &PipelineCache() const { return m_pipelineCache; }
 private:
 	/**
 	 * Creation utility
@@ -77,18 +79,23 @@ private:
 	 */
 	void createSwapchain();
 	void createSwapchainImages();
+	void setupPipelineCache();
 	void createCommandPool(unsigned int graphicsQIndex);
 	void createFences();
 	void createGraphicsPipeline();
 	//Destroy
 	void destroyFences();
 	void destroyCommandPool();
+	void backupPipelineCache();
+	void destroyPipelineCache();
 	void destroySwapChainImages();
 	void destroySwapChain();
 	void destroyLogicalDevice();
 	void destroySurface();
 	void destroyInstance();
 	void destroyWindow();
+	//util
+	std::string pipelineCacheFilepath();
 };
 
 #endif //__Context_h__

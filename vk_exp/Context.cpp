@@ -1,4 +1,7 @@
 #include "Context.h"
+#include <sstream>
+#include <fstream>
+
 /**
  * Public fns
  */
@@ -21,7 +24,7 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		createSurface();
 		//Select the most suitable GPU
 		auto qs = selectPhysicalDevice();//0:graphicsQIndex, 1:presentQIndex
-										 //Create a logical device from the physical device
+		//Create a logical device from the physical device
 		createLogicalDevice(std::get<0>(qs));
 		//Grab the graphical and present queues
 		m_graphicsQueue = m_device.getQueue(std::get<0>(qs), 0);
@@ -33,6 +36,8 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		createSwapchain();
 		//Create views for the swap chain images
 		createSwapchainImages();
+		//Create/Load pipeline cache
+		setupPipelineCache();
 		//Create the command pool and buffers
 		createCommandPool(std::get<0>(qs));
 		//Create memory fences for swapchain images
@@ -52,6 +57,8 @@ void Context::destroy()
 		SDL_HideWindow(m_window);
 	destroyFences();
 	destroyCommandPool();
+	backupPipelineCache();
+	destroyPipelineCache();
 	destroySwapChainImages();
 	destroySwapChain();
 	if(m_renderingFinishedSemaphore)
@@ -366,7 +373,44 @@ void Context::createSwapchainImages()
 		m_scImageViews[i] = m_device.createImageView(imgCreate);
 	}
 }
+void Context::setupPipelineCache()
+{
+	//Generate pipeline cache filename for current device
+	std::string cachepath = pipelineCacheFilepath();
 
+	//Check if it exists/is accessible
+	std::ifstream f(cachepath, std::ios::binary | std::ios::ate);
+
+	vk::PipelineCacheCreateInfo pipelineCacheCreate;
+	if (f.is_open()) 
+	{
+		//Load binary blob
+		size_t fileSize = (size_t)f.tellg();
+		std::vector<char> buffer(fileSize);
+
+		f.seekg(0);
+		f.read(buffer.data(), fileSize);
+
+		f.close();
+		//Create cache object from blob
+		{
+			pipelineCacheCreate.flags = {};
+			pipelineCacheCreate.initialDataSize = buffer.size();
+			pipelineCacheCreate.pInitialData = buffer.data();
+			printf("Loaded pipeline cachefile %s\n", cachepath.c_str());
+		}
+	}
+	else
+	{
+		//Create new empty pipeline cache
+		{
+			pipelineCacheCreate.flags = {};
+			pipelineCacheCreate.initialDataSize = 0;
+			pipelineCacheCreate.pInitialData = nullptr;
+		}
+	}
+	m_pipelineCache = m_device.createPipelineCache(pipelineCacheCreate);
+}
 void Context::createCommandPool(unsigned int graphicsQIndex)
 {
 	// createCommandPool();
@@ -428,6 +472,31 @@ void Context::destroyCommandPool()
 		m_commandPool = nullptr;
 	}
 }
+void Context::backupPipelineCache()
+{	
+	//Generate pipeline cache filename for current device
+	std::string cachepath = pipelineCacheFilepath();
+	//Check if it exists/is accessible
+	std::ofstream f(cachepath, std::ios::binary | std::ios::trunc);	
+	if (f.is_open())
+	{
+		//Grab binary blob
+		std::vector<unsigned char> buffer = m_device.getPipelineCacheData(m_pipelineCache);
+		//Write binary blob
+		f.write((char*)buffer.data(), buffer.size());
+
+		f.close();
+		fprintf(stderr, "Updated pipeline cache file '%s'.\n", cachepath.c_str());
+	}
+	else
+		fprintf(stderr, "Failed to open file '%s' to update pipeline cache.\n", cachepath.c_str());
+}
+void Context::destroyPipelineCache()
+{
+	m_device.destroyPipelineCache(m_pipelineCache);
+	m_pipelineCache = nullptr;
+}
+
 void Context::destroySwapChainImages()
 {
 	for (auto &a : m_scImageViews)
@@ -555,4 +624,20 @@ void Context::destroyDebugCallbacks()
 void Context::createGraphicsPipeline()
 {
 	
+}
+
+
+std::string Context::pipelineCacheFilepath()
+{
+	if (!m_physicalDevice)
+		throw std::exception("Pipeline cache filename requires knowledge of device.");
+	//Get physical device vendorId/deviceId
+	auto deviceProp = m_physicalDevice.getProperties();
+	std::ostringstream cachepath;
+	cachepath << "pipeline";
+	cachepath << deviceProp.vendorID;
+	cachepath << ".";
+	cachepath << deviceProp.deviceID;
+	cachepath << ".cache";
+	return cachepath.str();
 }

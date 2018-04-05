@@ -25,7 +25,7 @@ GraphicsPipeline::GraphicsPipeline(Context &ctx, const char * vertPath, const ch
 	vk::GraphicsPipelineCreateInfo pipelineInfo(
 		{},					/*Flags*/
 		2,					/*Stage Count*/
-		s.data(),				/*Shader Stages*/
+		s.data(),			/*Shader Stages*/
 		&vi,				/*Vertex Input State*/
 		&ia,				/*Input Assembly State*/
 		nullptr,			/*Tessellation State*/
@@ -41,7 +41,7 @@ GraphicsPipeline::GraphicsPipeline(Context &ctx, const char * vertPath, const ch
 		nullptr,			/*Bass Pipeline Handle*/
 		-1					/*Base Pipeline Index*/
 	);
-	m_pipeline = m_context.Device().createGraphicsPipeline(nullptr, pipelineInfo);
+	m_pipeline = m_context.Device().createGraphicsPipeline(m_context.PipelineCache(), pipelineInfo);
 	m_context.Device().destroyShaderModule(_v);
 	m_context.Device().destroyShaderModule(_f);
 }
