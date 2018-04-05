@@ -119,29 +119,32 @@ void Context::createInstance(const char * title)
 	//Load list of minimum Vulkan extensions required for SDL surface creation
 	std::vector<const char*> windowExtensions = requiredInstanceExtensions();
 	//Create Vulkan instance
-	vk::ApplicationInfo appInfo(
-		title,						/*Application Name*/
-		VK_MAKE_VERSION(1, 0, 0),	/*Application Version*/
-		"vk_exp",					/*Engine Name*/
-		VK_MAKE_VERSION(0, 0, 0),	/*Engine Version*/
-		VK_API_VERSION_1_0			/*Minimum Supported API Version*/
-	);
+	auto appInfo = vk::ApplicationInfo();
+	{
+		appInfo.pApplicationName = title;
+		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+		appInfo.pEngineName = "vk_exp";
+		appInfo.engineVersion = VK_MAKE_VERSION(0, 0, 0);
+		appInfo.apiVersion = VK_API_VERSION_1_0;
+	}
 #ifdef _DEBUG
 	const std::vector<const char*> validationLayers = supportedValidationLayers();
 #endif
-	vk::InstanceCreateInfo instanceCreateInfo(
-	{},
-		&appInfo,								/*Application Info Struct*/
+	auto instanceCreateInfo = vk::InstanceCreateInfo();
+	{
+		instanceCreateInfo.flags = {};
+		instanceCreateInfo.pApplicationInfo = &appInfo;
 #ifdef _DEBUG
-		(unsigned int)validationLayers.size(),	/*Enabled Layer Count*/
-		validationLayers.data(),				/*Enabled Layer Names*/
+		instanceCreateInfo.enabledLayerCount = (unsigned int)validationLayers.size();
+		instanceCreateInfo.ppEnabledLayerNames = validationLayers.data();
 #else
-		0,										/*Enabled Layer Count*/
-		nullptr,								/*Enabled Layer Names*/
+		instanceCreateInfo.enabledLayerCount = 0;
+		instanceCreateInfo.ppEnabledLayerNames = nullptr;
 #endif
-		(unsigned int)windowExtensions.size(),	/*Enabled Extension Count*/
-		windowExtensions.data()					/*Enabled Extensions*/
-	);
+		instanceCreateInfo.enabledExtensionCount = (unsigned int)windowExtensions.size();
+		instanceCreateInfo.ppEnabledExtensionNames = windowExtensions.data();
+	}
+
 	try
 	{
 		m_instance = vk::createInstance(instanceCreateInfo);//Can't modify extensions after instance load, so need to merge extensions lists
@@ -249,35 +252,40 @@ void Context::createLogicalDevice(unsigned int graphicsQIndex)
 	static const std::vector<const char*> deviceExtensionNames = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
-	const float priority[]{ 1.0f };//Required by spec
-	vk::DeviceQueueCreateInfo deviceQueueCreateInfo(
-		{},				/*Flags*/
-		graphicsQIndex, /*Queue Family Index*/
-		1,				/*Queue Count*/
-		&priority[0]	/*Queue Priorities*/
-	);
-	/**
-	 * Enable features like geometry shaders here
-	 */
-	vk::PhysicalDeviceFeatures pdf;
+	const float priority = 1.0f;
+	auto deviceQueueCreateInfo = vk::DeviceQueueCreateInfo();
+	{
+		deviceQueueCreateInfo.flags = {};
+		deviceQueueCreateInfo.queueFamilyIndex = graphicsQIndex;
+		deviceQueueCreateInfo.queueCount = 1;
+		deviceQueueCreateInfo.pQueuePriorities = &priority;
+	}
+	auto pdf = vk::PhysicalDeviceFeatures();
+	{
+		/**
+		* Enable features like geometry shaders here
+		*/
+		//pdf.geometryShader = true;
+	}
 #ifdef _DEBUG
 	const std::vector<const char*> validationLayers = supportedValidationLayers();
 #endif
-	vk::DeviceCreateInfo deviceCreateInfo(
-		{}											/*Flags*/,
-		1,											/*Queue Info Count*/
-		&deviceQueueCreateInfo,						/*Queue Create Info*/
+	auto deviceCreateInfo = vk::DeviceCreateInfo();
+	{
+		deviceCreateInfo.flags = {};
+		deviceCreateInfo.queueCreateInfoCount = 1;
+		deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
 #ifdef _DEBUG
-		(unsigned int)validationLayers.size(),		/*Enabled Layer Count*/
-		validationLayers.data(),					/*Enabled Layer Names*/
+		deviceCreateInfo.enabledLayerCount = (unsigned int)validationLayers.size();
+		deviceCreateInfo.ppEnabledLayerNames = validationLayers.data();
 #else
-		0,											/*Enabled Layer Count*/
-		nullptr,									/*Enabled Layer Names*/
+		deviceCreateInfo.enabledLayerCount = 0;
+		deviceCreateInfo.ppEnabledLayerNames = nullptr;
 #endif
-		(unsigned int)deviceExtensionNames.size(),	/*Enabled Extension Count*/
-		deviceExtensionNames.data(),				/*Enabled Extension Names*/
-		&pdf										/*Enabled Physical Device Features*/
-	);
+		deviceCreateInfo.enabledExtensionCount = (unsigned int)deviceExtensionNames.size();
+		deviceCreateInfo.ppEnabledExtensionNames = deviceExtensionNames.data();
+		deviceCreateInfo.pEnabledFeatures = &pdf;
+	}
 	m_device = m_physicalDevice.createDevice(deviceCreateInfo);
 }
 void Context::createSwapchain()
@@ -322,51 +330,55 @@ void Context::createSwapchain()
 	m_swapchainDims = vk::Extent2D(windowWidth, windowHeight);
 	if (windowWidth == 0 || windowHeight == 0)
 		throw std::exception("createSwapchain()2");
-	vk::SwapchainCreateInfoKHR swapChainCreateInfo(
-	{},
-		m_surface,
-		swapchainDesiredImageCount,
-		m_surfaceFormat.format,
-		m_surfaceFormat.colorSpace,
-		m_swapchainDims, 
-		1, /*Layers (Always 1 unless stereo rendering)*/
-		vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
-		vk::SharingMode::eExclusive,
-		0,								/*Queue Family Count (unnecessary for eExclusive)*/
-		nullptr,						/*Queue Family Indicies (unnecessary for eExclusive)*/
-		surfaceCap.currentTransform,	/*PreTransform*/
-		vk::CompositeAlphaFlagBitsKHR::eOpaque, /*Composite Alpha*/
-		vk::PresentModeKHR::eFifo, /*Present Mode*/
-		true, /*Clipped*/
-		vk::SwapchainKHR() /*Old Swapchain*/
-	);
+	auto swapChainCreateInfo = vk::SwapchainCreateInfoKHR();
+	{
+		swapChainCreateInfo.flags = {};
+		swapChainCreateInfo.surface = m_surface;
+		swapChainCreateInfo.minImageCount = swapchainDesiredImageCount;
+		swapChainCreateInfo.imageFormat = m_surfaceFormat.format;
+		swapChainCreateInfo.imageColorSpace = m_surfaceFormat.colorSpace;
+		swapChainCreateInfo.imageExtent = m_swapchainDims;
+		swapChainCreateInfo.imageArrayLayers = 1; //Always 1 unless stereo rendering
+		swapChainCreateInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst;
+		swapChainCreateInfo.imageSharingMode = vk::SharingMode::eExclusive,
+		swapChainCreateInfo.queueFamilyIndexCount = 0;//Unnecessary for eExclusive
+		swapChainCreateInfo.pQueueFamilyIndices = nullptr;
+		swapChainCreateInfo.preTransform = surfaceCap.currentTransform;
+		swapChainCreateInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+		swapChainCreateInfo.presentMode = vk::PresentModeKHR::eFifo;
+		swapChainCreateInfo.clipped = true;
+		swapChainCreateInfo.oldSwapchain = vk::SwapchainKHR();
+	}
 	m_swapchain = m_device.createSwapchainKHR(swapChainCreateInfo);
 }
 void Context::createSwapchainImages()
 {
 	m_scImages = m_device.getSwapchainImagesKHR(m_swapchain);
 	m_scImageViews.resize(m_scImages.size());
-	vk::ComponentMapping swizzleIdent(
-		vk::ComponentSwizzle::eIdentity, 
-		vk::ComponentSwizzle::eIdentity, 
-		vk::ComponentSwizzle::eIdentity, 
-		vk::ComponentSwizzle::eIdentity
-	);
-	vk::ImageSubresourceRange subresourceTarget(
-		vk::ImageAspectFlagBits::eColor,	/*Aspect Mask*/
-		0,									/*Base MipMap Level*/
-		1,									/*Level Count*/
-		0,									/*Base Array Layer*/
-		1									/*Layer Count*/
-	);
-	vk::ImageViewCreateInfo imgCreate(
-		{},						/*Flags*/
-		vk::Image(),			/*Image*/
-		vk::ImageViewType::e2D,	/*Image View Type*/
-		m_surfaceFormat.format,	/*Format*/
-		swizzleIdent,			/*Component Mapping*/
-		subresourceTarget		/*Subresource Range*/
-	);
+	auto swizzleIdent = vk::ComponentMapping();
+	{
+		swizzleIdent.r = vk::ComponentSwizzle::eIdentity;
+		swizzleIdent.g = vk::ComponentSwizzle::eIdentity;
+		swizzleIdent.b = vk::ComponentSwizzle::eIdentity;
+		swizzleIdent.a = vk::ComponentSwizzle::eIdentity;
+	}
+	auto subresourceTarget = vk::ImageSubresourceRange();
+	{
+		subresourceTarget.aspectMask = vk::ImageAspectFlagBits::eColor;
+		subresourceTarget.baseMipLevel = 0;
+		subresourceTarget.levelCount = 1;
+		subresourceTarget.baseArrayLayer = 0;
+		subresourceTarget.layerCount = 1;
+	}
+	auto imgCreate = vk::ImageViewCreateInfo();
+	{
+		imgCreate.flags = {};
+		imgCreate.image = vk::Image();
+		imgCreate.viewType = vk::ImageViewType::e2D;
+		imgCreate.format = m_surfaceFormat.format;
+		imgCreate.components = swizzleIdent;
+		imgCreate.subresourceRange = subresourceTarget;
+	}
 	for (size_t i = 0; i < m_scImageViews.size(); i++)
 	{
 		imgCreate.image = m_scImages[i];
@@ -381,7 +393,7 @@ void Context::setupPipelineCache()
 	//Check if it exists/is accessible
 	std::ifstream f(cachepath, std::ios::binary | std::ios::ate);
 
-	vk::PipelineCacheCreateInfo pipelineCacheCreate;
+	auto pipelineCacheCreate = vk::PipelineCacheCreateInfo();
 	if (f.is_open()) 
 	{
 		//Load binary blob
@@ -414,17 +426,19 @@ void Context::setupPipelineCache()
 void Context::createCommandPool(unsigned int graphicsQIndex)
 {
 	// createCommandPool();
-	vk::CommandPoolCreateInfo commandPoolCreateInfo(
-		vk::CommandPoolCreateFlagBits::eResetCommandBuffer | vk::CommandPoolCreateFlagBits::eTransient,
-		graphicsQIndex
-	);
+	auto commandPoolCreateInfo = vk::CommandPoolCreateInfo();
+	{
+		commandPoolCreateInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer | vk::CommandPoolCreateFlagBits::eTransient;
+		commandPoolCreateInfo.queueFamilyIndex = graphicsQIndex;
+	}
 	m_commandPool = m_device.createCommandPool(commandPoolCreateInfo);
 	//createCommandBuffers();
-	vk::CommandBufferAllocateInfo commandBufferAllocInfo(
-		m_commandPool,
-		vk::CommandBufferLevel::ePrimary,
-		(unsigned int)m_scImages.size()
-	);
+	auto commandBufferAllocInfo = vk::CommandBufferAllocateInfo();
+	{
+		commandBufferAllocInfo.commandPool = m_commandPool;
+		commandBufferAllocInfo.level = vk::CommandBufferLevel::ePrimary;
+		commandBufferAllocInfo.commandBufferCount = (unsigned int)m_scImages.size();
+	}
 	m_commandBuffers = m_device.allocateCommandBuffers(commandBufferAllocInfo);
 }
 void Context::createFences()
@@ -434,8 +448,7 @@ void Context::createFences()
 	{
 		try
 		{
-			vk::FenceCreateInfo createInfo(vk::FenceCreateFlagBits::eSignaled);
-			m_fences[i] = m_device.createFence(createInfo);
+			m_fences[i] = m_device.createFence({ vk::FenceCreateFlagBits::eSignaled });
 		}
 		catch (...)
 		{
