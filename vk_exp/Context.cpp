@@ -156,6 +156,7 @@ void Context::createInstance(const char * title)
 	try
 	{
 		m_instance = vk::createInstance(instanceCreateInfo);//Can't modify extensions after instance load, so need to merge extensions lists
+		m_dynamicLoader = vk::DispatchLoaderDynamic(m_instance);
 	}
 	catch (vk::ExtensionNotPresentError ex)
 	{
@@ -565,6 +566,7 @@ void Context::destroyLogicalDevice()
 	if(m_device)
 	{
 		m_device.waitIdle();
+		m_dynamicLoader = vk::DispatchLoaderDynamic(m_instance);
 		m_device.destroy();
 		m_device = nullptr;
 	}
@@ -581,6 +583,7 @@ void Context::destroyInstance()
 {
 	if(m_instance)
 	{
+		m_dynamicLoader = vk::DispatchLoaderDynamic();
 		m_instance.destroy();
 		m_instance = nullptr;
 	}
