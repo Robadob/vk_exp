@@ -29,6 +29,7 @@ class Context
 	vk::SurfaceKHR m_surface = nullptr;
 	vk::PhysicalDevice m_physicalDevice = nullptr;
 	vk::Device m_device = nullptr;
+    vk::DispatchLoaderDynamic m_dynamicLoader;
 	vk::Queue m_graphicsQueue = nullptr;
 	vk::Queue m_presentQueue = nullptr;
 	vk::Semaphore m_imageAvailableSemaphore = nullptr;

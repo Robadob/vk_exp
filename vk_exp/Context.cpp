@@ -295,6 +295,7 @@ void Context::createLogicalDevice(unsigned int graphicsQIndex)
 		deviceCreateInfo.pEnabledFeatures = &pdf;
 	}
 	m_device = m_physicalDevice.createDevice(deviceCreateInfo);
+    m_dynamicLoader = vk::DispatchLoaderDynamic(m_instance, m_device);
 }
 void Context::createSwapchain()
 {
@@ -639,28 +640,18 @@ void Context::createDebugCallbacks()
 		debugLayerCallback
 	);
 	//Must dynamically load extension fn
-	//m_debugCallback = m_instance.createDebugReportCallbackEXT(debugCallbackCreateInfo);
-	auto func = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(m_instance, "vkCreateDebugReportCallbackEXT");
-	if (func)
-	{
-		VkResult result = func(m_instance, reinterpret_cast<VkDebugReportCallbackCreateInfoEXT*>(&debugCallbackCreateInfo), nullptr, reinterpret_cast<VkDebugReportCallbackEXT*>(&m_debugCallback));
-		if (result != VK_SUCCESS)
-			fprintf(stderr, "Error occurred during dynamic call of 'vkCreateDebugReportCallbackEXT'\n");
-	}
-	else
-		fprintf(stderr,"Could not load extension for vkCreateDebugReportCallbackEXT!\n");
+    if(m_dynamicLoader.vkCreateDebugReportCallbackEXT)
+    {
+        m_debugCallback = m_instance.createDebugReportCallbackEXT(debugCallbackCreateInfo, nullptr, m_dynamicLoader);
+    }
+    else
+        fprintf(stderr, "Could not load extension for vkCreateDebugReportCallbackEXT!\n");
 }
 void Context::destroyDebugCallbacks()
 {
 	//Must dynamically load extension fn
-	//m_instance.destroyDebugReportCallbackEXT(m_debugCallback);
-	auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(m_instance, "vkDestroyDebugReportCallbackEXT");
-	if (func)
-	{
-		func(m_instance, *reinterpret_cast<VkDebugReportCallbackEXT_T**>(&m_debugCallback), nullptr);		
-	}
-	else
-		fprintf(stderr, "Could not load extension for vkDestroyDebugReportCallbackEXT!\n");
+    if (m_dynamicLoader.vkDestroyDebugReportCallbackEXT)
+	    m_instance.destroyDebugReportCallbackEXT(m_debugCallback, nullptr, m_dynamicLoader);
 	m_debugCallback = nullptr;
 }
 #endif
