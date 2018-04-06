@@ -26,6 +26,7 @@ class Context
 	bool isInit = false;
 	SDL_Window *m_window = nullptr;
 	vk::Instance m_instance = nullptr;
+	vk::DispatchLoaderDynamic m_dynamicLoader;
 	vk::SurfaceKHR m_surface = nullptr;
 	vk::PhysicalDevice m_physicalDevice = nullptr;
 	vk::Device m_device = nullptr;
