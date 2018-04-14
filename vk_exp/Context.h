@@ -25,6 +25,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugLayerCallback(
 class Context
 {
 	std::atomic<bool> isInit = false;
+	SDL_Rect m_windowedBounds;//Storage of position/size of window before fullscreen
 	SDL_Window *m_window = nullptr;
 	vk::Instance m_instance = nullptr;
 	vk::DispatchLoaderDynamic m_dynamicLoader;
@@ -33,6 +34,8 @@ class Context
 	vk::Device m_device = nullptr;
 	vk::Queue m_graphicsQueue = nullptr;
 	vk::Queue m_presentQueue = nullptr;
+	unsigned int m_graphicsQueueId = 0;
+	unsigned int m_presentQueueId = 0;
 	vk::Extent2D m_swapchainDims;
 	vk::SurfaceFormatKHR m_surfaceFormat;
 	vk::SwapchainKHR m_swapchain = nullptr;
@@ -58,6 +61,7 @@ public:
 	const vk::Extent2D &SurfaceDims() const { return m_swapchainDims; }
 	const vk::SurfaceFormatKHR &SurfaceFormat() const { return m_surfaceFormat; }
 	const vk::PipelineCache &PipelineCache() const { return m_pipelineCache; }
+	void rebuildSwapChain();
 	void getNextImage();
 private:
 	/**
@@ -92,6 +96,7 @@ private:
 	void createFramebuffers();
 	void createCommandPool(unsigned int graphicsQIndex);//Redundant arg?
 	void createFences();
+	void fillCommandBuffers();
 	//Destroy
 	void destroyFences();
 	void destroyCommandPool();
@@ -106,6 +111,11 @@ private:
 	void destroyWindow();
 	//util
 	std::string pipelineCacheFilepath();
+	void createSwapchainStuff();
+	void destroySwapchainStuff();
+public:
+	void toggleFullScreen();
+	bool isFullscreen();
 };
 
 #endif //__Context_h__

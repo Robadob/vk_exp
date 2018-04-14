@@ -37,8 +37,38 @@ void MainLoop::loop()
 		// handle each event on the queue
 		SDL_Event e;
 		while (SDL_PollEvent(&e) != 0) {
-			if (e.type == SDL_QUIT)
-				loopContinue.store(false);
+			switch (e.type) {
+				case SDL_QUIT:
+					loopContinue.store(false);
+					break;
+				case SDL_KEYDOWN:
+				{
+					int x = 0;
+					int y = 0;
+					SDL_GetMouseState(&x, &y);
+					handleKeypress(e.key.keysym.sym, x, y);
+				}
+				break;
+				//case SDL_MOUSEWHEEL:
+				//break;
+				case SDL_MOUSEMOTION:
+				{
+					//handleMouseMove(e.motion.xrel, e.motion.yrel);
+					break;
+				}
+				case SDL_MOUSEBUTTONDOWN:
+				{
+					//toggleMouseMode();
+					break;
+				}
+				case SDL_WINDOWEVENT:
+				{
+					if (e.window.event == SDL_WINDOWEVENT_RESIZED)
+					{
+						ctxt.rebuildSwapChain();
+					}
+				}
+			}
 		}
 		//Draw Frame
 		drawFrame();
@@ -100,4 +130,20 @@ void MainLoop::drawFrame()
 	ctxt.getNextImage();
 	//Execute command buffer with image as attachment to framebuffer
 	//Return image to swapchain present
+}
+void MainLoop::handleKeypress(SDL_Keycode keycode, int x, int y) {
+	switch (keycode) {
+	case SDLK_ESCAPE:
+		stop();
+		break;
+	case SDLK_F11:
+		ctxt.toggleFullScreen();
+		break;
+	case SDLK_F10:
+		//this->setMSAA(!this->msaaState);
+		break;
+	default:
+		// Do nothing?
+		break;
+	}
 }

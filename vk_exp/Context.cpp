@@ -28,23 +28,17 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		createSurface();
 		//Select the most suitable GPU
 		auto qs = selectPhysicalDevice();//0:graphicsQIndex, 1:presentQIndex
+		m_graphicsQueueId = std::get<0>(qs);
+		m_presentQueueId = std::get<1>(qs);
 		//Create a logical device from the physical device
-		createLogicalDevice(std::get<0>(qs), std::get<1>(qs));
+		createLogicalDevice(m_graphicsQueueId, m_presentQueueId);
 		//Grab the graphical and present queues
-		m_graphicsQueue = m_device.getQueue(std::get<0>(qs), 0);
-		m_presentQueue = m_device.getQueue(std::get<1>(qs), 0);
-		//Create the swapchain for double/triple buffering (support for this isn't actually required by the spec???!)
-		createSwapchain();
-		//Create views for the swap chain images
-		createSwapchainImages();
+		m_graphicsQueue = m_device.getQueue(m_graphicsQueueId, 0);
+		m_presentQueue = m_device.getQueue(m_presentQueueId, 0);
 		//Create/Load pipeline cache
 		setupPipelineCache();
-		//Create GFX pipeline? (framebuffer/commandpool dependent on this for renderpass)
-		createGraphicsPipeline();
-		//Create Framebuffer
-		createFramebuffers();
-		//Create the command pool and buffers, begin Renderpasses (inside each command buff)
-		createCommandPool(std::get<0>(qs));
+		//Create Swapchain and dependencies
+		createSwapchainStuff();
 		//Create semaphores for queue sync
 		m_imageAvailableSemaphore = m_device.createSemaphore({});
 		m_renderingFinishedSemaphore = m_device.createSemaphore({});
@@ -55,33 +49,7 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		/**
 		 * Start Drawing!
 		 **/
-		{
-			for (unsigned int i = 0; i<m_commandBuffers.size(); ++i)
-			{
-				auto cbBegin = vk::CommandBufferBeginInfo();
-				{
-					cbBegin.flags = vk::CommandBufferUsageFlagBits::eSimultaneousUse;//Command buffer can be resubmitted whilst awaiting execution
-					cbBegin.pInheritanceInfo = nullptr;
-				}
-				m_commandBuffers[i].begin(cbBegin);
-				auto rpBegin = vk::RenderPassBeginInfo();
-				vk::ClearValue clearColor;
-				{
-					rpBegin.renderPass = m_gfxPipeline->RenderPass();
-					rpBegin.framebuffer = m_scFramebuffers[i];
-					rpBegin.renderArea.offset = vk::Offset2D({ 0, 0 });
-					rpBegin.renderArea.extent = m_swapchainDims;
-					rpBegin.clearValueCount = 1;
-					clearColor.color = vk::ClearColorValue(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
-					rpBegin.pClearValues = &clearColor;
-				}
-				m_commandBuffers[i].beginRenderPass(rpBegin, vk::SubpassContents::eInline);
-				m_commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Pipeline());
-				m_commandBuffers[i].draw(3, 1, 0, 0);
-				m_commandBuffers[i].endRenderPass();
-				m_commandBuffers[i].end();
-			}
-		}
+		fillCommandBuffers();
 	}
 	catch (std::exception ex)
 	{
@@ -105,14 +73,9 @@ void Context::destroy()
 		m_device.destroySemaphore(m_imageAvailableSemaphore);
 		m_imageAvailableSemaphore = nullptr;
 	}
-	destroyCommandPool();
-	delete m_gfxPipeline;
-	m_gfxPipeline = nullptr;
-	destroyFramebuffers();
 	backupPipelineCache();
 	destroyPipelineCache();
-	destroySwapChainImages();
-	destroySwapChain();
+	destroySwapchainStuff();
 	destroyLogicalDevice();
 	destroySurface();
 #ifdef _DEBUG
@@ -122,9 +85,42 @@ void Context::destroy()
 	destroyWindow();
 	isInit.store(false);
 }
+
+void Context::rebuildSwapChain()
+{
+	if (ready())
+	{
+		m_device.waitIdle();
+		destroySwapchainStuff();
+		createSwapchainStuff(); 
+		fillCommandBuffers();
+	}
+}
 /**
  * Creation utility fns
  */
+void Context::createSwapchainStuff()
+{
+	//Create the swapchain for double/triple buffering (support for this isn't actually required by the spec???!)
+	createSwapchain();
+	//Create views for the swap chain images
+	createSwapchainImages();
+	//Create GFX pipeline? (framebuffer/commandpool dependent on this for renderpass)
+	createGraphicsPipeline();
+	//Create Framebuffer
+	createFramebuffers();
+	//Create the command pool and buffers, begin Renderpasses (inside each command buff)
+	createCommandPool(m_graphicsQueueId);
+}
+void Context::destroySwapchainStuff()
+{
+	destroyCommandPool();
+	delete m_gfxPipeline;
+	m_gfxPipeline = nullptr;
+	destroyFramebuffers();
+	destroySwapChainImages();
+	destroySwapChain();
+}
 std::vector<const char*> Context::requiredInstanceExtensions() const
 {
 	unsigned int extensionCount = 0;
@@ -156,7 +152,7 @@ void Context::createWindow(unsigned int width, unsigned int height, const char *
 		SDL_WINDOWPOS_UNDEFINED, //yPos
 		width,
 		height,
-		SDL_WINDOW_HIDDEN | SDL_WINDOW_VULKAN //| SDL_WINDOW_BORDERLESS
+		SDL_WINDOW_HIDDEN | SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE//| SDL_WINDOW_BORDERLESS
 	);
 }
 void Context::createInstance(const char * title)
@@ -545,6 +541,34 @@ void Context::createFences()
 		}
 	}
 }
+void Context::fillCommandBuffers()
+{
+	for (unsigned int i = 0; i<m_commandBuffers.size(); ++i)
+	{
+		auto cbBegin = vk::CommandBufferBeginInfo();
+		{
+			cbBegin.flags = vk::CommandBufferUsageFlagBits::eSimultaneousUse;//Command buffer can be resubmitted whilst awaiting execution
+			cbBegin.pInheritanceInfo = nullptr;
+		}
+		m_commandBuffers[i].begin(cbBegin);
+		auto rpBegin = vk::RenderPassBeginInfo();
+		vk::ClearValue clearColor;
+		{
+			rpBegin.renderPass = m_gfxPipeline->RenderPass();
+			rpBegin.framebuffer = m_scFramebuffers[i];
+			rpBegin.renderArea.offset = vk::Offset2D({ 0, 0 });
+			rpBegin.renderArea.extent = m_swapchainDims;
+			rpBegin.clearValueCount = 1;
+			clearColor.color = vk::ClearColorValue(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
+			rpBegin.pClearValues = &clearColor;
+		}
+		m_commandBuffers[i].beginRenderPass(rpBegin, vk::SubpassContents::eInline);
+		m_commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Pipeline());
+		m_commandBuffers[i].draw(3, 1, 0, 0);
+		m_commandBuffers[i].endRenderPass();
+		m_commandBuffers[i].end();
+	}
+}
 /**
  * Destruction utility fns
  */
@@ -738,50 +762,90 @@ std::string Context::pipelineCacheFilepath()
 }
 void Context::getNextImage()
 {
-	vk::ResultValue<uint32_t> imageIndex = m_device.acquireNextImageKHR(m_swapchain, std::numeric_limits<uint64_t>::max(), m_imageAvailableSemaphore, nullptr);
-	if(imageIndex.result==vk::Result::eSuccess)
+	try
 	{
-		uint32_t i = imageIndex.value;
-		//Success
-		//Submit command buffer and setup semaphores to flag ready
-		vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-		auto submitInfo = vk::SubmitInfo();
+		vk::ResultValue<uint32_t> imageIndex = m_device.acquireNextImageKHR(m_swapchain, std::numeric_limits<uint64_t>::max(), m_imageAvailableSemaphore, nullptr);
+		if (imageIndex.result == vk::Result::eSuccess)
 		{
-			submitInfo.waitSemaphoreCount = 1;
-			submitInfo.pWaitSemaphores = &m_imageAvailableSemaphore;
-			submitInfo.pWaitDstStageMask = &waitStage;
-			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &m_commandBuffers[i];
-			submitInfo.signalSemaphoreCount = 1;
-			submitInfo.pSignalSemaphores = &m_renderingFinishedSemaphore;
-		}
-		vk::Result a = m_graphicsQueue.submit(1, &submitInfo, nullptr);
-		auto presentInfo = vk::PresentInfoKHR();
-		{
-			presentInfo.waitSemaphoreCount = 1;
-			presentInfo.pWaitSemaphores = &m_renderingFinishedSemaphore;
-			presentInfo.swapchainCount = 1;
-			presentInfo.pSwapchains = &m_swapchain;
-			presentInfo.pImageIndices = &i;
-			presentInfo.pResults = nullptr;
-		}
-		vk::Result b = m_presentQueue.presentKHR(&presentInfo);
-		if(a != vk::Result::eSuccess)
-			fprintf(stderr, "m_graphicsQueue.submit(): %s\n", getVulkanResultString(a));
-		if(b != vk::Result::eSuccess)
-			fprintf(stderr, "m_presentQueue.presentKHR(): %s\n", getVulkanResultString(b));
+			uint32_t i = imageIndex.value;
+			//Success
+			//Submit command buffer and setup semaphores to flag ready
+			vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+			auto submitInfo = vk::SubmitInfo();
+			{
+				submitInfo.waitSemaphoreCount = 1;
+				submitInfo.pWaitSemaphores = &m_imageAvailableSemaphore;
+				submitInfo.pWaitDstStageMask = &waitStage;
+				submitInfo.commandBufferCount = 1;
+				submitInfo.pCommandBuffers = &m_commandBuffers[i];
+				submitInfo.signalSemaphoreCount = 1;
+				submitInfo.pSignalSemaphores = &m_renderingFinishedSemaphore;
+			}
+			vk::Result a = m_graphicsQueue.submit(1, &submitInfo, nullptr);
+			auto presentInfo = vk::PresentInfoKHR();
+			{
+				presentInfo.waitSemaphoreCount = 1;
+				presentInfo.pWaitSemaphores = &m_renderingFinishedSemaphore;
+				presentInfo.swapchainCount = 1;
+				presentInfo.pSwapchains = &m_swapchain;
+				presentInfo.pImageIndices = &i;
+				presentInfo.pResults = nullptr;
+			}
+			vk::Result b = m_presentQueue.presentKHR(&presentInfo);
+			//if (a != vk::Result::eSuccess)
+			//	fprintf(stderr, "m_graphicsQueue.submit(): %s\n", getVulkanResultString(a));
+			//if (b != vk::Result::eSuccess)
+			//	fprintf(stderr, "m_presentQueue.presentKHR(): %s\n", getVulkanResultString(b));
 #ifdef _DEBUG
-//		m_presentQueue.waitIdle();
+			m_presentQueue.waitIdle();
 #endif
+		}
+		else
+		{
+			vk::throwResultException(imageIndex.result, getVulkanResultString(imageIndex.result));
+		}
 	}
-	else if(imageIndex.result == vk::Result::eErrorOutOfDateKHR || imageIndex.result == vk::Result::eSuboptimalKHR)
+	catch(vk::IncompatibleDisplayKHRError&)
 	{
-		//Surface has been resized, recreate swapchain etc
+		rebuildSwapChain();
 	}
-	else
+	catch (vk::OutOfDateKHRError&)
 	{
-		fprintf(stderr, "acquireNextImageKHR(): %s\n", getVulkanResultString(imageIndex.result));
+		rebuildSwapChain();
 	}
-	//failed
-
+	catch(std::system_error &err)
+	{
+		fprintf(stderr, "%s\n", err.what());
+		getchar();
+	}
+}
+void Context::toggleFullScreen()
+{
+	if (this->isFullscreen()) {
+		// Update the window using the stored windowBounds
+		SDL_SetWindowBordered(m_window, SDL_TRUE);
+		SDL_SetWindowResizable(m_window, SDL_TRUE);
+		SDL_SetWindowSize(m_window, m_windowedBounds.w, m_windowedBounds.h);
+		SDL_SetWindowPosition(m_window, m_windowedBounds.x, m_windowedBounds.y);
+	}
+	else {
+		// Store the windowedBounds for later
+		SDL_GetWindowPosition(m_window, &m_windowedBounds.x, &m_windowedBounds.y);
+		SDL_GetWindowSize(m_window, &m_windowedBounds.w, &m_windowedBounds.h);
+		// Get the window bounds for the current screen
+		int displayIndex = SDL_GetWindowDisplayIndex(m_window);
+		SDL_Rect displayBounds;
+		SDL_GetDisplayBounds(displayIndex, &displayBounds);
+		// Update the window
+		SDL_SetWindowBordered(m_window, SDL_FALSE);
+		SDL_SetWindowResizable(m_window, SDL_FALSE);
+		SDL_SetWindowPosition(m_window, displayBounds.x, displayBounds.y);
+		SDL_SetWindowSize(m_window, displayBounds.w, displayBounds.h);
+	}
+	rebuildSwapChain();
+}
+bool Context::isFullscreen()
+{
+	// Use window borders as a proxy to detect fullscreen.
+	return (SDL_GetWindowFlags(m_window) & SDL_WINDOW_BORDERLESS) == SDL_WINDOW_BORDERLESS;
 }

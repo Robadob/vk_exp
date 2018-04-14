@@ -21,6 +21,7 @@ public:
 private:
 	void loop();
 	void loopAsync();
+	void handleKeypress(SDL_Keycode keycode, int x, int y);
 	void drawFrame();
 	std::atomic<bool> loopContinue;
 	std::thread *loopThread;
