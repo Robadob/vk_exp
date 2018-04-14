@@ -74,7 +74,7 @@ std::vector<char> GraphicsPipeline::readFile(const char * file)
 
 vk::ShaderModule GraphicsPipeline::createShader(const std::vector<char>& code) const
 {
-	auto createInfo = vk::ShaderModuleCreateInfo();
+	vk::ShaderModuleCreateInfo createInfo;
 	{
 		createInfo.flags = {};
 		createInfo.codeSize = code.size();
@@ -85,7 +85,7 @@ vk::ShaderModule GraphicsPipeline::createShader(const std::vector<char>& code) c
 
 std::vector<vk::PipelineShaderStageCreateInfo> GraphicsPipeline::createPipelineInfo(vk::ShaderModule &v, vk::ShaderModule &f)
 {
-	auto vss = vk::PipelineShaderStageCreateInfo();
+	vk::PipelineShaderStageCreateInfo vss;
 	{
 		vss.flags = {};
 		vss.stage = vk::ShaderStageFlagBits::eVertex;
@@ -93,7 +93,7 @@ std::vector<vk::PipelineShaderStageCreateInfo> GraphicsPipeline::createPipelineI
 		vss.pName = "main";
 		vss.pSpecializationInfo = nullptr;
 	}
-	auto fss = vk::PipelineShaderStageCreateInfo();
+	vk::PipelineShaderStageCreateInfo fss;
 	{
 		fss.flags = {};
 		fss.stage = vk::ShaderStageFlagBits::eFragment;
@@ -101,11 +101,11 @@ std::vector<vk::PipelineShaderStageCreateInfo> GraphicsPipeline::createPipelineI
 		fss.pName = "main";
 		fss.pSpecializationInfo = nullptr;
 	}
-	return std::vector<vk::PipelineShaderStageCreateInfo>{ vss, fss };;
+	return std::vector<vk::PipelineShaderStageCreateInfo>{ vss, fss };
 }
 vk::PipelineVertexInputStateCreateInfo GraphicsPipeline::vertexInput() const
 {
-	auto rtn = vk::PipelineVertexInputStateCreateInfo();
+	vk::PipelineVertexInputStateCreateInfo rtn;
 	{
 		rtn.flags = {};
 		rtn.vertexBindingDescriptionCount = 0;
@@ -117,7 +117,7 @@ vk::PipelineVertexInputStateCreateInfo GraphicsPipeline::vertexInput() const
 }
 vk::PipelineInputAssemblyStateCreateInfo GraphicsPipeline::inputAssembly() const
 {
-	auto rtn = vk::PipelineInputAssemblyStateCreateInfo();
+	vk::PipelineInputAssemblyStateCreateInfo rtn;
 	{
 		rtn.flags = {};
 		rtn.topology = vk::PrimitiveTopology::eTriangleList;
@@ -138,7 +138,7 @@ vk::PipelineViewportStateCreateInfo GraphicsPipeline::viewportState()
 		{ 0,0 },	/*Offset*/
 		ex			/*Extent*/
 	);
-	auto rtn = vk::PipelineViewportStateCreateInfo();
+	vk::PipelineViewportStateCreateInfo rtn;
 	{
 		rtn.flags = {};
 		rtn.viewportCount = 1;
@@ -150,26 +150,26 @@ vk::PipelineViewportStateCreateInfo GraphicsPipeline::viewportState()
 }
 vk::PipelineRasterizationStateCreateInfo GraphicsPipeline::rasterizerState() const
 {
-	auto rtn = vk::PipelineRasterizationStateCreateInfo();
+	vk::PipelineRasterizationStateCreateInfo rtn;
 	{
 		rtn.flags = {};
 		rtn.depthClampEnable = false;
 		rtn.rasterizerDiscardEnable = false;
 		rtn.polygonMode = vk::PolygonMode::eFill;
+		rtn.lineWidth = 1.0f;
 		rtn.cullMode = vk::CullModeFlagBits::eBack;
 		rtn.frontFace = vk::FrontFace::eCounterClockwise;
 		rtn.depthBiasEnable = false;
 		rtn.depthBiasConstantFactor = 0.0f;
 		rtn.depthBiasClamp = 0.0f;
 		rtn.depthBiasSlopeFactor = 0.0f;
-		rtn.lineWidth = 1.0f;
 	}
 	return rtn;
 }
 
 vk::PipelineMultisampleStateCreateInfo GraphicsPipeline::multisampleState() const
 {
-	auto rtn = vk::PipelineMultisampleStateCreateInfo();
+	vk::PipelineMultisampleStateCreateInfo rtn;
 	{
 		rtn.flags = {};
 		rtn.rasterizationSamples = vk::SampleCountFlagBits::e1;
@@ -184,7 +184,7 @@ vk::PipelineMultisampleStateCreateInfo GraphicsPipeline::multisampleState() cons
 
 vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState()
 {
-	t_cbas = vk::PipelineColorBlendAttachmentState();
+	//vk::PipelineColorBlendAttachmentState t_cbas;
 	{
 		t_cbas.blendEnable = false;
 		t_cbas.srcColorBlendFactor = vk::BlendFactor::eOne;
@@ -193,8 +193,9 @@ vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState()
 		t_cbas.srcAlphaBlendFactor = vk::BlendFactor::eOne;
 		t_cbas.dstAlphaBlendFactor = vk::BlendFactor::eZero;
 		t_cbas.alphaBlendOp = vk::BlendOp::eAdd;
+		t_cbas.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
 	}
-	auto rtn = vk::PipelineColorBlendStateCreateInfo();
+	vk::PipelineColorBlendStateCreateInfo rtn;
 	{
 		rtn.flags = {};
 		rtn.logicOpEnable = false;
@@ -211,7 +212,7 @@ vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState()
 
 vk::PipelineLayout GraphicsPipeline::pipelineLayout() const
 {
-	auto pipelineLayoutInfo = vk::PipelineLayoutCreateInfo();
+	vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
 	{
 		pipelineLayoutInfo.flags = {};
 		pipelineLayoutInfo.setLayoutCount = 0;
@@ -223,7 +224,7 @@ vk::PipelineLayout GraphicsPipeline::pipelineLayout() const
 }
 vk::RenderPass GraphicsPipeline::renderPass() const
 {
-	auto attachDesc = vk::AttachmentDescription();	
+	vk::AttachmentDescription attachDesc;
 	{
 		attachDesc.flags = {};
 		attachDesc.format = m_context.SurfaceFormat().format;
@@ -235,12 +236,12 @@ vk::RenderPass GraphicsPipeline::renderPass() const
 		attachDesc.initialLayout = vk::ImageLayout::eUndefined;
 		attachDesc.finalLayout = vk::ImageLayout::ePresentSrcKHR;
 	}
-	auto colorAttachmentRef = vk::AttachmentReference();
+	vk::AttachmentReference colorAttachmentRef;
 	{
 		colorAttachmentRef.attachment = 0;
 		colorAttachmentRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
 	}
-	auto subpass = vk::SubpassDescription();
+	vk::SubpassDescription subpass;
 	{
 		subpass.flags = {};
 		subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
@@ -253,15 +254,25 @@ vk::RenderPass GraphicsPipeline::renderPass() const
 		subpass.preserveAttachmentCount = 0;
 		subpass.pPreserveAttachments = nullptr;
 	}
-	auto rpInfo = vk::RenderPassCreateInfo();
+	vk::SubpassDependency spDependency;
+	{
+		spDependency.srcSubpass = VK_SUBPASS_EXTERNAL;//Previous renderpass
+		spDependency.dstSubpass = 0;//Index of subpass
+		spDependency.srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+		spDependency.srcAccessMask = vk::AccessFlags();
+		//Wait for swapchaun to finish reading from image
+		spDependency.dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+		spDependency.dstAccessMask = vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
+	}
+	vk::RenderPassCreateInfo rpInfo;
 	{
 		rpInfo.flags = {};
 		rpInfo.attachmentCount = 1;
 		rpInfo.pAttachments = &attachDesc;
 		rpInfo.subpassCount = 1;
 		rpInfo.pSubpasses = &subpass;
-		rpInfo.dependencyCount = 0;
-		rpInfo.pDependencies = nullptr;
+		rpInfo.dependencyCount = 1;
+		rpInfo.pDependencies = &spDependency;
 	}
 	return m_context.Device().createRenderPass(rpInfo);
 }

@@ -3,12 +3,15 @@
 #include <fstream>
 #include "GraphicsPipeline.h"
 #include <SDL/SDL_vulkan.h>
+#include "vk.h"
+#include <set>
+
 /**
  * Public fns
  */
 void Context::init(unsigned int width, unsigned int height, const char * title)
 {
-	if (isInit)
+	if (isInit.load())
 		return;
 	try
 	{
@@ -26,29 +29,59 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		//Select the most suitable GPU
 		auto qs = selectPhysicalDevice();//0:graphicsQIndex, 1:presentQIndex
 		//Create a logical device from the physical device
-		createLogicalDevice(std::get<0>(qs));
+		createLogicalDevice(std::get<0>(qs), std::get<1>(qs));
 		//Grab the graphical and present queues
 		m_graphicsQueue = m_device.getQueue(std::get<0>(qs), 0);
 		m_presentQueue = m_device.getQueue(std::get<1>(qs), 0);
-		//Create semaphores for queue sync
-		m_imageAvailableSemaphore = m_device.createSemaphore({});
-		m_renderingFinishedSemaphore = m_device.createSemaphore({});
 		//Create the swapchain for double/triple buffering (support for this isn't actually required by the spec???!)
 		createSwapchain();
 		//Create views for the swap chain images
 		createSwapchainImages();
 		//Create/Load pipeline cache
 		setupPipelineCache();
-		//Create GFX pipeline? (framebuffer dependent on this)
+		//Create GFX pipeline? (framebuffer/commandpool dependent on this for renderpass)
 		createGraphicsPipeline();
 		//Create Framebuffer
 		createFramebuffers();
-		//Create the command pool and buffers
+		//Create the command pool and buffers, begin Renderpasses (inside each command buff)
 		createCommandPool(std::get<0>(qs));
+		//Create semaphores for queue sync
+		m_imageAvailableSemaphore = m_device.createSemaphore({});
+		m_renderingFinishedSemaphore = m_device.createSemaphore({});
 		//Create memory fences for swapchain images
 		createFences();
 		SDL_ShowWindow(m_window);
-		isInit = true;
+		isInit.store(true);
+		/**
+		 * Start Drawing!
+		 **/
+		{
+			for (unsigned int i = 0; i<m_commandBuffers.size(); ++i)
+			{
+				auto cbBegin = vk::CommandBufferBeginInfo();
+				{
+					cbBegin.flags = vk::CommandBufferUsageFlagBits::eSimultaneousUse;//Command buffer can be resubmitted whilst awaiting execution
+					cbBegin.pInheritanceInfo = nullptr;
+				}
+				m_commandBuffers[i].begin(cbBegin);
+				auto rpBegin = vk::RenderPassBeginInfo();
+				vk::ClearValue clearColor;
+				{
+					rpBegin.renderPass = m_gfxPipeline->RenderPass();
+					rpBegin.framebuffer = m_scFramebuffers[i];
+					rpBegin.renderArea.offset = vk::Offset2D({ 0, 0 });
+					rpBegin.renderArea.extent = m_swapchainDims;
+					rpBegin.clearValueCount = 1;
+					clearColor.color = vk::ClearColorValue(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
+					rpBegin.pClearValues = &clearColor;
+				}
+				m_commandBuffers[i].beginRenderPass(rpBegin, vk::SubpassContents::eInline);
+				m_commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Pipeline());
+				m_commandBuffers[i].draw(3, 1, 0, 0);
+				m_commandBuffers[i].endRenderPass();
+				m_commandBuffers[i].end();
+			}
+		}
 	}
 	catch (std::exception ex)
 	{
@@ -60,25 +93,26 @@ void Context::destroy()
 {
 	if(m_window)
 		SDL_HideWindow(m_window);
+	m_presentQueue.waitIdle();
 	destroyFences();
+	if (m_renderingFinishedSemaphore)
+	{
+		m_device.destroySemaphore(m_renderingFinishedSemaphore);
+		m_renderingFinishedSemaphore = nullptr;
+	}
+	if (m_imageAvailableSemaphore)
+	{
+		m_device.destroySemaphore(m_imageAvailableSemaphore);
+		m_imageAvailableSemaphore = nullptr;
+	}
 	destroyCommandPool();
-	delete gfxPipeline;
-	gfxPipeline = nullptr;
+	delete m_gfxPipeline;
+	m_gfxPipeline = nullptr;
 	destroyFramebuffers();
 	backupPipelineCache();
 	destroyPipelineCache();
 	destroySwapChainImages();
 	destroySwapChain();
-	if(m_renderingFinishedSemaphore)
-	{
-		m_device.destroySemaphore(m_renderingFinishedSemaphore);
-		m_renderingFinishedSemaphore = nullptr;
-	}
-	if(m_imageAvailableSemaphore)
-	{
-		m_device.destroySemaphore(m_imageAvailableSemaphore);
-		m_imageAvailableSemaphore = nullptr;
-	}
 	destroyLogicalDevice();
 	destroySurface();
 #ifdef _DEBUG
@@ -86,8 +120,7 @@ void Context::destroy()
 #endif
 	destroyInstance();
 	destroyWindow();
-	//SDL_Vulkan_UnloadLibrary();
-	isInit = false;
+	isInit.store(false);
 }
 /**
  * Creation utility fns
@@ -112,6 +145,10 @@ std::vector<const char*> Context::requiredInstanceExtensions() const
 }
 void Context::createWindow(unsigned int width, unsigned int height, const char *title)
 {
+	if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+		SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
+		return;
+	}
 	m_window = SDL_CreateWindow
 	(
 		"vk_exp",
@@ -124,10 +161,8 @@ void Context::createWindow(unsigned int width, unsigned int height, const char *
 }
 void Context::createInstance(const char * title)
 {
-	//Load list of minimum Vulkan extensions required for SDL surface creation
-	std::vector<const char*> windowExtensions = requiredInstanceExtensions();
 	//Create Vulkan instance
-	auto appInfo = vk::ApplicationInfo();
+	vk::ApplicationInfo appInfo;
 	{
 		appInfo.pApplicationName = title;
 		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -138,7 +173,9 @@ void Context::createInstance(const char * title)
 #ifdef _DEBUG
 	const std::vector<const char*> validationLayers = supportedValidationLayers();
 #endif
-	auto instanceCreateInfo = vk::InstanceCreateInfo();
+	//Load list of minimum Vulkan extensions required for SDL surface creation
+	std::vector<const char*> windowExtensions = requiredInstanceExtensions();
+	vk::InstanceCreateInfo instanceCreateInfo;
 	{
 		instanceCreateInfo.flags = {};
 		instanceCreateInfo.pApplicationInfo = &appInfo;
@@ -256,18 +293,23 @@ std::pair<unsigned int, unsigned int> Context::selectPhysicalDevice()
 	}
 	return std::make_pair(chosenGraphicsQueueFamilyIndex, chosenPresentQueueFamilyIndex);
 }
-void Context::createLogicalDevice(unsigned int graphicsQIndex)
+void Context::createLogicalDevice(unsigned int graphicsQIndex, unsigned int presentQIndex)
 {
 	static const std::vector<const char*> deviceExtensionNames = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
 	const float priority = 1.0f;
-	auto deviceQueueCreateInfo = vk::DeviceQueueCreateInfo();
-	{
-		deviceQueueCreateInfo.flags = {};
-		deviceQueueCreateInfo.queueFamilyIndex = graphicsQIndex;
-		deviceQueueCreateInfo.queueCount = 1;
-		deviceQueueCreateInfo.pQueuePriorities = &priority;
+	std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
+	std::set<unsigned int> uniqueQueueFamilies = { graphicsQIndex, presentQIndex };
+	for (int queueFamily : uniqueQueueFamilies) {
+		vk::DeviceQueueCreateInfo deviceQueueCreateInfo;
+		{//Graphics q
+			deviceQueueCreateInfo.flags = {};
+			deviceQueueCreateInfo.queueFamilyIndex = queueFamily;
+			deviceQueueCreateInfo.queueCount = 1;
+			deviceQueueCreateInfo.pQueuePriorities = &priority;
+		}
+		queueCreateInfos.push_back(deviceQueueCreateInfo);
 	}
 	auto pdf = vk::PhysicalDeviceFeatures();
 	{
@@ -282,8 +324,8 @@ void Context::createLogicalDevice(unsigned int graphicsQIndex)
 	auto deviceCreateInfo = vk::DeviceCreateInfo();
 	{
 		deviceCreateInfo.flags = {};
-		deviceCreateInfo.queueCreateInfoCount = 1;
-		deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
+		deviceCreateInfo.queueCreateInfoCount = (unsigned int)queueCreateInfos.size();
+		deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
 #ifdef _DEBUG
 		deviceCreateInfo.enabledLayerCount = (unsigned int)validationLayers.size();
 		deviceCreateInfo.ppEnabledLayerNames = validationLayers.data();
@@ -297,6 +339,20 @@ void Context::createLogicalDevice(unsigned int graphicsQIndex)
 	}
 	m_device = m_physicalDevice.createDevice(deviceCreateInfo);
     m_dynamicLoader = vk::DispatchLoaderDynamic(m_instance, m_device);
+}
+vk::PresentModeKHR Context::selectPresentMode()
+{
+	std::vector<vk::PresentModeKHR> pm = m_physicalDevice.getSurfacePresentModesKHR(m_surface);
+	vk::PresentModeKHR bestMode = vk::PresentModeKHR::eFifo;
+	for (const auto& availablePresentMode : pm) {
+		if (availablePresentMode == vk::PresentModeKHR::eMailbox) {
+			return availablePresentMode;
+		}
+		else if (availablePresentMode == vk::PresentModeKHR::eImmediate) {
+			bestMode = availablePresentMode;
+		}
+	}
+	return bestMode;
 }
 void Context::createSwapchain()
 {
@@ -340,6 +396,7 @@ void Context::createSwapchain()
 	m_swapchainDims = vk::Extent2D(windowWidth, windowHeight);
 	if (windowWidth == 0 || windowHeight == 0)
 		throw std::exception("createSwapchain()2");
+
 	auto swapChainCreateInfo = vk::SwapchainCreateInfoKHR();
 	{
 		swapChainCreateInfo.flags = {};
@@ -349,15 +406,15 @@ void Context::createSwapchain()
 		swapChainCreateInfo.imageColorSpace = m_surfaceFormat.colorSpace;
 		swapChainCreateInfo.imageExtent = m_swapchainDims;
 		swapChainCreateInfo.imageArrayLayers = 1; //Always 1 unless stereo rendering
-		swapChainCreateInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst;
+		swapChainCreateInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
 		swapChainCreateInfo.imageSharingMode = vk::SharingMode::eExclusive,
 		swapChainCreateInfo.queueFamilyIndexCount = 0;//Unnecessary for eExclusive
 		swapChainCreateInfo.pQueueFamilyIndices = nullptr;
 		swapChainCreateInfo.preTransform = surfaceCap.currentTransform;
 		swapChainCreateInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
-		swapChainCreateInfo.presentMode = vk::PresentModeKHR::eFifo;
+		swapChainCreateInfo.presentMode = selectPresentMode();
 		swapChainCreateInfo.clipped = true;
-		swapChainCreateInfo.oldSwapchain = vk::SwapchainKHR();
+		swapChainCreateInfo.oldSwapchain = nullptr;
 	}
 	m_swapchain = m_device.createSwapchainKHR(swapChainCreateInfo);
 }
@@ -383,7 +440,7 @@ void Context::createSwapchainImages()
 	auto imgCreate = vk::ImageViewCreateInfo();
 	{
 		imgCreate.flags = {};
-		imgCreate.image = vk::Image();
+		imgCreate.image = nullptr;
 		imgCreate.viewType = vk::ImageViewType::e2D;
 		imgCreate.format = m_surfaceFormat.format;
 		imgCreate.components = swizzleIdent;
@@ -402,7 +459,7 @@ void Context::createFramebuffers()
 		vk::ImageView attachments[] = { m_scImageViews[i] };
 		auto fbCreate = vk::FramebufferCreateInfo();
 		{
-			fbCreate.renderPass = gfxPipeline->RenderPass();
+			fbCreate.renderPass = m_gfxPipeline->RenderPass();
 			fbCreate.attachmentCount = 1;
 			fbCreate.pAttachments = attachments;
 			fbCreate.width = m_swapchainDims.width;
@@ -455,7 +512,7 @@ void Context::createCommandPool(unsigned int graphicsQIndex)
 	// createCommandPool();
 	auto commandPoolCreateInfo = vk::CommandPoolCreateInfo();
 	{
-		commandPoolCreateInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer | vk::CommandPoolCreateFlagBits::eTransient;
+		commandPoolCreateInfo.flags = {};// vk::CommandPoolCreateFlagBits::eResetCommandBuffer | vk::CommandPoolCreateFlagBits::eTransient;
 		commandPoolCreateInfo.queueFamilyIndex = graphicsQIndex;
 	}
 	m_commandPool = m_device.createCommandPool(commandPoolCreateInfo);
@@ -595,6 +652,7 @@ void Context::destroyWindow()
 		SDL_DestroyWindow(m_window);
 		m_window = nullptr;
 	}
+	SDL_Quit();
 }
 /**
  * Debug fns
@@ -661,7 +719,7 @@ void Context::destroyDebugCallbacks()
 
 void Context::createGraphicsPipeline()
 {
-	gfxPipeline = new GraphicsPipeline(*this,"../shaders/vert.spv","../shaders/frag.spv");
+	m_gfxPipeline = new GraphicsPipeline(*this,"../shaders/vert.spv","../shaders/frag.spv");
 }
 
 std::string Context::pipelineCacheFilepath()
@@ -677,4 +735,53 @@ std::string Context::pipelineCacheFilepath()
 	cachepath << deviceProp.deviceID;
 	cachepath << ".cache";
 	return cachepath.str();
+}
+void Context::getNextImage()
+{
+	vk::ResultValue<uint32_t> imageIndex = m_device.acquireNextImageKHR(m_swapchain, std::numeric_limits<uint64_t>::max(), m_imageAvailableSemaphore, nullptr);
+	if(imageIndex.result==vk::Result::eSuccess)
+	{
+		uint32_t i = imageIndex.value;
+		//Success
+		//Submit command buffer and setup semaphores to flag ready
+		vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+		auto submitInfo = vk::SubmitInfo();
+		{
+			submitInfo.waitSemaphoreCount = 1;
+			submitInfo.pWaitSemaphores = &m_imageAvailableSemaphore;
+			submitInfo.pWaitDstStageMask = &waitStage;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &m_commandBuffers[i];
+			submitInfo.signalSemaphoreCount = 1;
+			submitInfo.pSignalSemaphores = &m_renderingFinishedSemaphore;
+		}
+		vk::Result a = m_graphicsQueue.submit(1, &submitInfo, nullptr);
+		auto presentInfo = vk::PresentInfoKHR();
+		{
+			presentInfo.waitSemaphoreCount = 1;
+			presentInfo.pWaitSemaphores = &m_renderingFinishedSemaphore;
+			presentInfo.swapchainCount = 1;
+			presentInfo.pSwapchains = &m_swapchain;
+			presentInfo.pImageIndices = &i;
+			presentInfo.pResults = nullptr;
+		}
+		vk::Result b = m_presentQueue.presentKHR(&presentInfo);
+		if(a != vk::Result::eSuccess)
+			fprintf(stderr, "m_graphicsQueue.submit(): %s\n", getVulkanResultString(a));
+		if(b != vk::Result::eSuccess)
+			fprintf(stderr, "m_presentQueue.presentKHR(): %s\n", getVulkanResultString(b));
+#ifdef _DEBUG
+//		m_presentQueue.waitIdle();
+#endif
+	}
+	else if(imageIndex.result == vk::Result::eErrorOutOfDateKHR || imageIndex.result == vk::Result::eSuboptimalKHR)
+	{
+		//Surface has been resized, recreate swapchain etc
+	}
+	else
+	{
+		fprintf(stderr, "acquireNextImageKHR(): %s\n", getVulkanResultString(imageIndex.result));
+	}
+	//failed
+
 }

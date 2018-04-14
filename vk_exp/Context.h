@@ -3,6 +3,7 @@
 #include <SDL/SDL.h>
 #undef main //SDL breaks the regular main entry point, this fixes
 #include <vulkan/vulkan.hpp>
+#include <atomic>
 class GraphicsPipeline;
 #ifdef _DEBUG
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugLayerCallback(
@@ -23,7 +24,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugLayerCallback(
  */
 class Context
 {
-	bool isInit = false;
+	std::atomic<bool> isInit = false;
 	SDL_Window *m_window = nullptr;
 	vk::Instance m_instance = nullptr;
 	vk::DispatchLoaderDynamic m_dynamicLoader;
@@ -32,8 +33,6 @@ class Context
 	vk::Device m_device = nullptr;
 	vk::Queue m_graphicsQueue = nullptr;
 	vk::Queue m_presentQueue = nullptr;
-	vk::Semaphore m_imageAvailableSemaphore = nullptr;
-	vk::Semaphore m_renderingFinishedSemaphore = nullptr;
 	vk::Extent2D m_swapchainDims;
 	vk::SurfaceFormatKHR m_surfaceFormat;
 	vk::SwapchainKHR m_swapchain = nullptr;
@@ -43,19 +42,23 @@ class Context
 	vk::PipelineCache m_pipelineCache = nullptr;
 	vk::CommandPool m_commandPool = nullptr;
 	std::vector<vk::CommandBuffer> m_commandBuffers;
+	vk::Semaphore m_imageAvailableSemaphore = nullptr;
+	vk::Semaphore m_renderingFinishedSemaphore = nullptr;
 	std::vector<vk::Fence> m_fences;
 
-	GraphicsPipeline *gfxPipeline = nullptr;
+	GraphicsPipeline *m_gfxPipeline = nullptr;
 #ifdef _DEBUG
 	vk::DebugReportCallbackEXT m_debugCallback = nullptr;
 #endif
 public:
 	void init(unsigned int width = 1280, unsigned int height = 720, const char * title = "vk_exp");
+	bool ready() const { return isInit.load(); }
 	void destroy();
 	const vk::Device &Device() const { return m_device; }
 	const vk::Extent2D &SurfaceDims() const { return m_swapchainDims; }
 	const vk::SurfaceFormatKHR &SurfaceFormat() const { return m_surfaceFormat; }
 	const vk::PipelineCache &PipelineCache() const { return m_pipelineCache; }
+	void getNextImage();
 private:
 	/**
 	 * Creation utility
@@ -77,17 +80,18 @@ private:
 	/**
 	 * This should be improved to pass external vk::PhysicalDeviceFeature requirements
 	 */
-	void createLogicalDevice(unsigned int graphicsQIndex);
+	void createLogicalDevice(unsigned int graphicsQIndex, unsigned int presentQIndex);
+	vk::PresentModeKHR Context::selectPresentMode();//Used by CreateSwapchain
 	/**
 	 * Could improve selection of swap surface
 	 */
 	void createSwapchain();
 	void createSwapchainImages();
-	void createFramebuffers();
 	void setupPipelineCache();
-	void createCommandPool(unsigned int graphicsQIndex);
-	void createFences();
 	void createGraphicsPipeline();
+	void createFramebuffers();
+	void createCommandPool(unsigned int graphicsQIndex);//Redundant arg?
+	void createFences();
 	//Destroy
 	void destroyFences();
 	void destroyCommandPool();

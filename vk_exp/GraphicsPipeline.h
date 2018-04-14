@@ -11,6 +11,7 @@ public:
 	GraphicsPipeline(Context &ctx, const char * vertPath, const char * fragPath);
 	~GraphicsPipeline();
 	const vk::RenderPass& RenderPass() const { return m_renderPass;  }
+	const vk::Pipeline& Pipeline() const { return m_pipeline; }
 private:
 	static std::vector<char> readFile(const char * file);
 	vk::ShaderModule createShader(const std::vector<char>& code) const;
