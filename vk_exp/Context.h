@@ -52,6 +52,11 @@ class Context
 	vk::DeviceMemory m_vertexBufferMemory = nullptr;
 	vk::Buffer m_indexBuffer = nullptr;
 	vk::DeviceMemory m_indexBufferMemory = nullptr;
+	vk::Buffer m_uniformBuffer = nullptr;
+	vk::DeviceMemory m_uniformBufferMemory = nullptr;
+	vk::DescriptorPool m_descriptorPool = nullptr;
+	vk::DescriptorSet m_descriptorSet = nullptr;
+	vk::DescriptorSetLayout m_descriptorSetLayout = nullptr;
 
 	GraphicsPipeline *m_gfxPipeline = nullptr;
 #ifdef _DEBUG
@@ -65,10 +70,15 @@ public:
 	const vk::Extent2D &SurfaceDims() const { return m_swapchainDims; }
 	const vk::SurfaceFormatKHR &SurfaceFormat() const { return m_surfaceFormat; }
 	const vk::PipelineCache &PipelineCache() const { return m_pipelineCache; }
+	const vk::DescriptorSetLayout &DescriptorSetLayout() const { return m_descriptorSetLayout; }
 	/**
 	 * Could switch to the active rebuild swapChainCreateInfo.oldSwapchain = m_swapChain; method
 	 */
 	void rebuildSwapChain();
+	/**
+	 * Could use push constants, more efficint for dynamic uniforms
+	 */
+	void updateUniformBuffer();
 	void getNextImage();
 private:
 	/**
@@ -92,7 +102,8 @@ private:
 	 * This should be improved to pass external vk::PhysicalDeviceFeature requirements
 	 */
 	void createLogicalDevice(unsigned int graphicsQIndex, unsigned int presentQIndex);
-	vk::PresentModeKHR Context::selectPresentMode();//Used by CreateSwapchain
+	vk::PresentModeKHR selectPresentMode();//Used by CreateSwapchain
+	void createDescriptorPool();
 	/**
 	 * Could improve selection of swap surface
 	 */
@@ -109,9 +120,11 @@ private:
 	 */
 	void createVertexBuffer();
 	void createIndexBuffer();
+	void createUniformBuffer();
 	//Destroy
 	void destroyVertexBuffer();
 	void destroyIndexBuffer();
+	void destroyUniformBuffer();
 	void destroyFences();
 	void destroyCommandPool();
 	void backupPipelineCache();
@@ -119,6 +132,7 @@ private:
 	void destroyFramebuffers();
 	void destroySwapChainImages();
 	void destroySwapChain();
+	void destroyDescriptorPool();
 	void destroyLogicalDevice();
 	void destroySurface();
 	void destroyInstance();

@@ -5,6 +5,8 @@
 #include <SDL/SDL_vulkan.h>
 #include "vk.h"
 #include <set>
+#include <chrono>
+#include <glm/gtc/matrix_transform.hpp>
 
 /**
  * Public fns
@@ -37,6 +39,7 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		m_presentQueue = m_device.getQueue(m_presentQueueId, 0);
 		//Create/Load pipeline cache
 		setupPipelineCache();
+		createDescriptorPool();
 		//Create Swapchain and dependencies
 		createSwapchainStuff();
 		//Create semaphores for queue sync
@@ -47,6 +50,7 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		//Build a Vertex Buf with model data
 		createVertexBuffer();
 		createIndexBuffer();
+		createUniformBuffer();
 		SDL_ShowWindow(m_window);
 		isInit.store(true);
 		/**
@@ -67,6 +71,7 @@ void Context::destroy()
 	m_presentQueue.waitIdle();
 	destroyVertexBuffer();
 	destroyIndexBuffer();
+	destroyUniformBuffer();
 	destroyFences();
 	if (m_renderingFinishedSemaphore)
 	{
@@ -81,6 +86,7 @@ void Context::destroy()
 	backupPipelineCache();
 	destroyPipelineCache();
 	destroySwapchainStuff();
+	destroyDescriptorPool();
 	destroyLogicalDevice();
 	destroySurface();
 #ifdef _DEBUG
@@ -355,6 +361,44 @@ vk::PresentModeKHR Context::selectPresentMode()
 	}
 	return bestMode;
 }
+void Context::createDescriptorPool()
+{
+	vk::DescriptorSetLayoutBinding dslb;
+	{
+		dslb.binding = 0;
+		dslb.descriptorType = vk::DescriptorType::eUniformBuffer;
+		dslb.descriptorCount = 1;
+		dslb.stageFlags = vk::ShaderStageFlagBits::eVertex;
+		dslb.pImmutableSamplers = nullptr;
+	}
+	vk::DescriptorSetLayoutCreateInfo descSetCreateInfo;
+	{
+		descSetCreateInfo.bindingCount = 1;
+		descSetCreateInfo.pBindings = &dslb;
+	}
+	m_descriptorSetLayout = m_device.createDescriptorSetLayout(descSetCreateInfo);
+	vk::DescriptorPoolSize poolSize;
+	{
+		poolSize.type = vk::DescriptorType::eUniformBuffer;
+		poolSize.descriptorCount = 1;
+	}
+	vk::DescriptorPoolCreateInfo poolCreateInfo;
+	{
+		poolCreateInfo.poolSizeCount = 1;
+		poolCreateInfo.pPoolSizes = &poolSize;
+		poolCreateInfo.maxSets = 1;
+		poolCreateInfo.flags = {};
+	}
+	m_descriptorPool = m_device.createDescriptorPool(poolCreateInfo);
+	vk::DescriptorSetLayout layouts[] = { m_descriptorSetLayout };
+	vk::DescriptorSetAllocateInfo descSetAllocInfo;
+	{
+		descSetAllocInfo.descriptorPool = m_descriptorPool;
+		descSetAllocInfo.descriptorSetCount = 1;
+		descSetAllocInfo.pSetLayouts = layouts;
+	}
+	m_descriptorSet = m_device.allocateDescriptorSets(descSetAllocInfo)[0];
+}
 void Context::createSwapchain()
 {
 	vk::SurfaceCapabilitiesKHR surfaceCap = m_physicalDevice.getSurfaceCapabilitiesKHR(m_surface);
@@ -569,6 +613,7 @@ void Context::fillCommandBuffers()
 		}
 		m_commandBuffers[i].beginRenderPass(rpBegin, vk::SubpassContents::eInline);
 		m_commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Pipeline());
+		m_commandBuffers[i].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->PipelineLayout(), 0, { m_descriptorSet }, {});
 		VkDeviceSize offsets[] = { 0 };
 		m_commandBuffers[i].bindVertexBuffers(0, 1, &m_vertexBuffer, offsets);
 		m_commandBuffers[i].bindIndexBuffer(m_indexBuffer, 0, vk::IndexType::eUint16);
@@ -649,7 +694,37 @@ void Context::createIndexBuffer()
 	m_device.destroyBuffer(stagingBuffer);
 	m_device.freeMemory(stagingBufferMemory);
 }
-
+void Context::createUniformBuffer()
+{
+	size_t buffSize = sizeof(UniformBufferObject);
+	//Transfer queue data transfer
+	createBuffer(
+		buffSize,
+		vk::BufferUsageFlagBits::eUniformBuffer,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		m_uniformBuffer,
+		m_uniformBufferMemory
+	);
+	//Bind to Pipeline
+	vk::DescriptorBufferInfo bufferInfo;
+	{
+		bufferInfo.buffer = m_uniformBuffer;
+		bufferInfo.offset = 0;
+		bufferInfo.range = buffSize;
+	}
+	vk::WriteDescriptorSet descWrite;
+	{
+		descWrite.dstSet = m_descriptorSet;
+		descWrite.dstBinding = 0;
+		descWrite.dstArrayElement = 0;
+		descWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
+		descWrite.descriptorCount = 1;
+		descWrite.pBufferInfo = &bufferInfo;
+		descWrite.pImageInfo = nullptr; // Optional
+		descWrite.pTexelBufferView = nullptr; // Optional
+	}
+	m_device.updateDescriptorSets(1, &descWrite, 0, nullptr);
+}
 /**
  * Destruction utility fns
  */
@@ -666,6 +741,13 @@ void Context::destroyIndexBuffer()
 	m_indexBuffer = nullptr;
 	m_device.freeMemory(m_indexBufferMemory);
 	m_indexBufferMemory = nullptr;
+}
+void Context::destroyUniformBuffer()
+{
+	m_device.destroyBuffer(m_uniformBuffer);
+	m_uniformBuffer = nullptr;
+	m_device.freeMemory(m_uniformBufferMemory);
+	m_uniformBufferMemory = nullptr;
 }
 void Context::destroyFences()
 {
@@ -736,6 +818,14 @@ void Context::destroySwapChain()
 	}
 	m_swapchainDims = vk::Extent2D(0, 0);
 	m_surfaceFormat = vk::SurfaceFormatKHR();
+}
+void Context::destroyDescriptorPool()
+{
+	m_device.destroyDescriptorSetLayout(m_descriptorSetLayout);
+	m_descriptorSetLayout = nullptr;
+	m_device.destroyDescriptorPool(m_descriptorPool);
+	m_descriptorPool = nullptr;
+	m_descriptorSet = nullptr;
 }
 void Context::destroyLogicalDevice()
 {
@@ -854,6 +944,24 @@ std::string Context::pipelineCacheFilepath()
 	cachepath << deviceProp.deviceID;
 	cachepath << ".cache";
 	return cachepath.str();
+}
+void Context::updateUniformBuffer()
+{
+	static auto startTime = std::chrono::high_resolution_clock::now();
+
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+	//Spin around z axis
+	UniformBufferObject ubo = {};
+	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.proj = glm::perspective(glm::radians(45.0f), m_swapchainDims.width / (float)m_swapchainDims.height, 0.1f, 10.0f);
+	ubo.proj[1][1] *= -1;
+	//Copy to uniform buffer
+	void* data = m_device.mapMemory(m_uniformBufferMemory, 0, sizeof(ubo), {});
+	memcpy(data, &ubo, sizeof(ubo));
+	m_device.unmapMemory(m_uniformBufferMemory);
 }
 void Context::getNextImage()
 {

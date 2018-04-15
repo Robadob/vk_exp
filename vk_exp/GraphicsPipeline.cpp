@@ -6,9 +6,10 @@
 
 GraphicsPipeline::GraphicsPipeline(Context &ctx, const char * vertPath, const char * fragPath)
 	: m_context(ctx)
-	, m_pipelineLayout(pipelineLayout())
-	, m_renderPass(renderPass())
 {
+	m_pipelineLayout = pipelineLayout();
+	m_renderPass = renderPass();
+
 	auto v = readFile(vertPath);
 	auto f = readFile(fragPath);
 	auto _v = createShader(v);
@@ -50,8 +51,11 @@ GraphicsPipeline::GraphicsPipeline(Context &ctx, const char * vertPath, const ch
 GraphicsPipeline::~GraphicsPipeline()
 {
 	m_context.Device().destroyPipeline(m_pipeline);
+	m_pipeline = nullptr;
 	m_context.Device().destroyPipelineLayout(m_pipelineLayout);
+	m_pipelineLayout = nullptr;
 	m_context.Device().destroyRenderPass(m_renderPass);
+	m_renderPass = nullptr;
 }
 
 std::vector<char> GraphicsPipeline::readFile(const char * file)
@@ -213,13 +217,13 @@ vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState()
 	return rtn;
 }
 
-vk::PipelineLayout GraphicsPipeline::pipelineLayout() const
+vk::PipelineLayout GraphicsPipeline::pipelineLayout()
 {
 	vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
 	{
 		pipelineLayoutInfo.flags = {};
-		pipelineLayoutInfo.setLayoutCount = 0;
-		pipelineLayoutInfo.pSetLayouts = nullptr;
+		pipelineLayoutInfo.setLayoutCount = 1;
+		pipelineLayoutInfo.pSetLayouts = &m_context.DescriptorSetLayout();
 		pipelineLayoutInfo.pushConstantRangeCount = 0;
 		pipelineLayoutInfo.pPushConstantRanges = nullptr;
 	}

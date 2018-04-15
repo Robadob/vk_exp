@@ -5,6 +5,11 @@
 class Context;
 
 #include <glm/glm.hpp>
+struct UniformBufferObject {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
 struct Vertex {
 	glm::vec2 pos;
 	glm::vec3 color;
@@ -43,7 +48,7 @@ static const std::vector<Vertex> tempVertices = {
 	{ { -0.5f, 0.5f },{ 1.0f, 1.0f, 1.0f } }
 };
 static const std::vector<uint16_t> tempIndices = {
-	2, 1, 0, 0, 3, 2
+	0, 1, 2, 2, 3, 0
 };
 /**
  * Consider using SPIRV-Cross for Shader introspection to detect layout/binding points by name
@@ -57,6 +62,7 @@ public:
 	~GraphicsPipeline();
 	const vk::RenderPass& RenderPass() const { return m_renderPass;  }
 	const vk::Pipeline& Pipeline() const { return m_pipeline; }
+	const vk::PipelineLayout& PipelineLayout() const { return m_pipelineLayout; }
 private:
 	static std::vector<char> readFile(const char * file);
 	vk::ShaderModule createShader(const std::vector<char>& code) const;
@@ -69,12 +75,12 @@ private:
 	vk::PipelineRasterizationStateCreateInfo rasterizerState() const;
 	vk::PipelineMultisampleStateCreateInfo multisampleState() const;
 	vk::PipelineColorBlendStateCreateInfo colorBlendState();
-	vk::PipelineLayout pipelineLayout() const;
+	vk::PipelineLayout pipelineLayout();
 	vk::RenderPass renderPass() const;
 
-	vk::Pipeline m_pipeline;
-	vk::PipelineLayout m_pipelineLayout;
-	vk::RenderPass m_renderPass;
+	vk::Pipeline m_pipeline = nullptr;
+	vk::PipelineLayout m_pipelineLayout = nullptr;
+	vk::RenderPass m_renderPass = nullptr;
 
 	//Temp structs that need pointers passed to CreateInfo's
 	vk::Viewport t_viewport;

@@ -126,10 +126,8 @@ bool MainLoop::isRunning() const
 }
 void MainLoop::drawFrame()
 {
-	//Get Image from swapchain
+	ctxt.updateUniformBuffer();
 	ctxt.getNextImage();
-	//Execute command buffer with image as attachment to framebuffer
-	//Return image to swapchain present
 }
 void MainLoop::handleKeypress(SDL_Keycode keycode, int x, int y) {
 	switch (keycode) {
