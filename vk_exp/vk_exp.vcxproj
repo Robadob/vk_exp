@@ -148,11 +148,13 @@
     </ClCompile>
     <ClCompile Include="GraphicsPipeline.cpp" />
     <ClCompile Include="MainLoop.cpp" />
+    <ClCompile Include="Shaders.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Context.h" />
     <ClInclude Include="GraphicsPipeline.h" />
     <ClInclude Include="MainLoop.h" />
+    <ClInclude Include="Shaders.h" />
     <ClInclude Include="vk.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
