@@ -3,6 +3,7 @@
 #include <fstream>
 #include "Context.h"
 
+
 GraphicsPipeline::GraphicsPipeline(Context &ctx, const char * vertPath, const char * fragPath)
 	: m_context(ctx)
 	, m_pipelineLayout(pipelineLayout())
@@ -22,7 +23,7 @@ GraphicsPipeline::GraphicsPipeline(Context &ctx, const char * vertPath, const ch
 	auto cbs = colorBlendState();
 	//auto ds = dynamicState();//Required if we wish to change viewport size at runtime
 
-	auto pipelineInfo = vk::GraphicsPipelineCreateInfo();
+	vk::GraphicsPipelineCreateInfo pipelineInfo;
 	{
 		pipelineInfo.flags = {};
 		pipelineInfo.stageCount = 2;
@@ -103,15 +104,17 @@ std::vector<vk::PipelineShaderStageCreateInfo> GraphicsPipeline::createPipelineI
 	}
 	return std::vector<vk::PipelineShaderStageCreateInfo>{ vss, fss };
 }
-vk::PipelineVertexInputStateCreateInfo GraphicsPipeline::vertexInput() const
+vk::PipelineVertexInputStateCreateInfo GraphicsPipeline::vertexInput()
 {
+	t_vibd = Vertex::getBindingDesc();
+	t_viad = Vertex::getAttributeDesc();
 	vk::PipelineVertexInputStateCreateInfo rtn;
 	{
 		rtn.flags = {};
-		rtn.vertexBindingDescriptionCount = 0;
-		rtn.pVertexBindingDescriptions = nullptr;
-		rtn.vertexAttributeDescriptionCount = 0;
-		rtn.pVertexAttributeDescriptions = nullptr;
+		rtn.vertexBindingDescriptionCount = 1;
+		rtn.pVertexBindingDescriptions = &t_vibd;
+		rtn.vertexAttributeDescriptionCount = (unsigned int)t_viad.size();
+		rtn.pVertexAttributeDescriptions = t_viad.data();
 	}
 	return rtn;
 }

@@ -48,6 +48,10 @@ class Context
 	vk::Semaphore m_imageAvailableSemaphore = nullptr;
 	vk::Semaphore m_renderingFinishedSemaphore = nullptr;
 	std::vector<vk::Fence> m_fences;
+	vk::Buffer m_vertexBuffer = nullptr;
+	vk::DeviceMemory m_vertexBufferMemory = nullptr;
+	vk::Buffer m_indexBuffer = nullptr;
+	vk::DeviceMemory m_indexBufferMemory = nullptr;
 
 	GraphicsPipeline *m_gfxPipeline = nullptr;
 #ifdef _DEBUG
@@ -61,6 +65,9 @@ public:
 	const vk::Extent2D &SurfaceDims() const { return m_swapchainDims; }
 	const vk::SurfaceFormatKHR &SurfaceFormat() const { return m_surfaceFormat; }
 	const vk::PipelineCache &PipelineCache() const { return m_pipelineCache; }
+	/**
+	 * Could switch to the active rebuild swapChainCreateInfo.oldSwapchain = m_swapChain; method
+	 */
 	void rebuildSwapChain();
 	void getNextImage();
 private:
@@ -97,7 +104,14 @@ private:
 	void createCommandPool(unsigned int graphicsQIndex);//Redundant arg?
 	void createFences();
 	void fillCommandBuffers();
+	/**
+	 * Could use a seperate transfer queue
+	 */
+	void createVertexBuffer();
+	void createIndexBuffer();
 	//Destroy
+	void destroyVertexBuffer();
+	void destroyIndexBuffer();
 	void destroyFences();
 	void destroyCommandPool();
 	void backupPipelineCache();
@@ -113,6 +127,9 @@ private:
 	std::string pipelineCacheFilepath();
 	void createSwapchainStuff();
 	void destroySwapchainStuff();
+	unsigned int findMemoryType(const unsigned int &typeFilter, const vk::MemoryPropertyFlags& properties) const;
+	void createBuffer(const vk::DeviceSize &size, const vk::BufferUsageFlags &usage, const vk::MemoryPropertyFlags &properties, vk::Buffer& buffer, vk::DeviceMemory& bufferMemory) const;
+	void copyBuffer(const vk::Buffer &src, const vk::Buffer &dest, const vk::DeviceSize &size, const vk::DeviceSize &srcOffset = 0, const vk::DeviceSize &dstOffset = 0) const;
 public:
 	void toggleFullScreen();
 	bool isFullscreen();

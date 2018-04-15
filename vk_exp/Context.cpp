@@ -44,6 +44,9 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		m_renderingFinishedSemaphore = m_device.createSemaphore({});
 		//Create memory fences for swapchain images
 		createFences();
+		//Build a Vertex Buf with model data
+		createVertexBuffer();
+		createIndexBuffer();
 		SDL_ShowWindow(m_window);
 		isInit.store(true);
 		/**
@@ -62,6 +65,8 @@ void Context::destroy()
 	if(m_window)
 		SDL_HideWindow(m_window);
 	m_presentQueue.waitIdle();
+	destroyVertexBuffer();
+	destroyIndexBuffer();
 	destroyFences();
 	if (m_renderingFinishedSemaphore)
 	{
@@ -307,7 +312,7 @@ void Context::createLogicalDevice(unsigned int graphicsQIndex, unsigned int pres
 		}
 		queueCreateInfos.push_back(deviceQueueCreateInfo);
 	}
-	auto pdf = vk::PhysicalDeviceFeatures();
+	vk::PhysicalDeviceFeatures pdf;
 	{
 		/**
 		* Enable features like geometry shaders here
@@ -393,7 +398,7 @@ void Context::createSwapchain()
 	if (windowWidth == 0 || windowHeight == 0)
 		throw std::exception("createSwapchain()2");
 
-	auto swapChainCreateInfo = vk::SwapchainCreateInfoKHR();
+	vk::SwapchainCreateInfoKHR swapChainCreateInfo;
 	{
 		swapChainCreateInfo.flags = {};
 		swapChainCreateInfo.surface = m_surface;
@@ -418,14 +423,14 @@ void Context::createSwapchainImages()
 {
 	m_scImages = m_device.getSwapchainImagesKHR(m_swapchain);
 	m_scImageViews.resize(m_scImages.size());
-	auto swizzleIdent = vk::ComponentMapping();
+	vk::ComponentMapping swizzleIdent;
 	{
 		swizzleIdent.r = vk::ComponentSwizzle::eIdentity;
 		swizzleIdent.g = vk::ComponentSwizzle::eIdentity;
 		swizzleIdent.b = vk::ComponentSwizzle::eIdentity;
 		swizzleIdent.a = vk::ComponentSwizzle::eIdentity;
 	}
-	auto subresourceTarget = vk::ImageSubresourceRange();
+	vk::ImageSubresourceRange subresourceTarget;
 	{
 		subresourceTarget.aspectMask = vk::ImageAspectFlagBits::eColor;
 		subresourceTarget.baseMipLevel = 0;
@@ -433,7 +438,7 @@ void Context::createSwapchainImages()
 		subresourceTarget.baseArrayLayer = 0;
 		subresourceTarget.layerCount = 1;
 	}
-	auto imgCreate = vk::ImageViewCreateInfo();
+	vk::ImageViewCreateInfo imgCreate;
 	{
 		imgCreate.flags = {};
 		imgCreate.image = nullptr;
@@ -453,7 +458,7 @@ void Context::createFramebuffers()
 	m_scFramebuffers.resize(m_scImageViews.size());
 	for (size_t i = 0; i < m_scImageViews.size(); i++) {
 		vk::ImageView attachments[] = { m_scImageViews[i] };
-		auto fbCreate = vk::FramebufferCreateInfo();
+		vk::FramebufferCreateInfo fbCreate;
 		{
 			fbCreate.renderPass = m_gfxPipeline->RenderPass();
 			fbCreate.attachmentCount = 1;
@@ -473,7 +478,7 @@ void Context::setupPipelineCache()
 	//Check if it exists/is accessible
 	std::ifstream f(cachepath, std::ios::binary | std::ios::ate);
 
-	auto pipelineCacheCreate = vk::PipelineCacheCreateInfo();
+	vk::PipelineCacheCreateInfo pipelineCacheCreate;
 	if (f.is_open()) 
 	{
 		//Load binary blob
@@ -506,14 +511,14 @@ void Context::setupPipelineCache()
 void Context::createCommandPool(unsigned int graphicsQIndex)
 {
 	// createCommandPool();
-	auto commandPoolCreateInfo = vk::CommandPoolCreateInfo();
+	vk::CommandPoolCreateInfo commandPoolCreateInfo;
 	{
 		commandPoolCreateInfo.flags = {};// vk::CommandPoolCreateFlagBits::eResetCommandBuffer | vk::CommandPoolCreateFlagBits::eTransient;
 		commandPoolCreateInfo.queueFamilyIndex = graphicsQIndex;
 	}
 	m_commandPool = m_device.createCommandPool(commandPoolCreateInfo);
 	//createCommandBuffers();
-	auto commandBufferAllocInfo = vk::CommandBufferAllocateInfo();
+	vk::CommandBufferAllocateInfo commandBufferAllocInfo;
 	{
 		commandBufferAllocInfo.commandPool = m_commandPool;
 		commandBufferAllocInfo.level = vk::CommandBufferLevel::ePrimary;
@@ -545,13 +550,13 @@ void Context::fillCommandBuffers()
 {
 	for (unsigned int i = 0; i<m_commandBuffers.size(); ++i)
 	{
-		auto cbBegin = vk::CommandBufferBeginInfo();
+		vk::CommandBufferBeginInfo cbBegin;
 		{
 			cbBegin.flags = vk::CommandBufferUsageFlagBits::eSimultaneousUse;//Command buffer can be resubmitted whilst awaiting execution
 			cbBegin.pInheritanceInfo = nullptr;
 		}
 		m_commandBuffers[i].begin(cbBegin);
-		auto rpBegin = vk::RenderPassBeginInfo();
+		vk::RenderPassBeginInfo rpBegin;
 		vk::ClearValue clearColor;
 		{
 			rpBegin.renderPass = m_gfxPipeline->RenderPass();
@@ -564,14 +569,104 @@ void Context::fillCommandBuffers()
 		}
 		m_commandBuffers[i].beginRenderPass(rpBegin, vk::SubpassContents::eInline);
 		m_commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Pipeline());
-		m_commandBuffers[i].draw(3, 1, 0, 0);
+		VkDeviceSize offsets[] = { 0 };
+		m_commandBuffers[i].bindVertexBuffers(0, 1, &m_vertexBuffer, offsets);
+		m_commandBuffers[i].bindIndexBuffer(m_indexBuffer, 0, vk::IndexType::eUint16);
+		//m_commandBuffers[i].draw((unsigned int)tempVertices.size(), 1, 0, 0);//Drawing triangles without index
+		m_commandBuffers[i].drawIndexed((unsigned int)tempIndices.size(), 1, 0, 0, 0);
 		m_commandBuffers[i].endRenderPass();
 		m_commandBuffers[i].end();
 	}
 }
+void Context::createVertexBuffer()
+{
+	size_t buffSize = sizeof(tempVertices[0])*tempVertices.size();
+	//Transfer queue data transfer
+	vk::Buffer stagingBuffer;
+	vk::DeviceMemory stagingBufferMemory;
+	createBuffer(
+		buffSize,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		stagingBuffer,
+		stagingBufferMemory
+	);
+	void* data;
+	m_device.mapMemory(stagingBufferMemory, 0, buffSize, {}, &data);
+	memcpy(data, tempVertices.data(), buffSize);
+	m_device.unmapMemory(stagingBufferMemory);
+	createBuffer(
+		buffSize,
+		vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		m_vertexBuffer,
+		m_vertexBufferMemory
+	);
+	copyBuffer(stagingBuffer, m_vertexBuffer, buffSize);
+	m_device.destroyBuffer(stagingBuffer);
+	m_device.freeMemory(stagingBufferMemory);
+	//Mapped buffer data transfer
+	/*
+	createBuffer(
+		buffSize,
+		vk::BufferUsageFlagBits::eVertexBuffer,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		m_vertexBuffer,
+		m_vertexBufferMemory
+	);
+	//Map Device Buffer to Host
+	void* data;
+	m_device.mapMemory(m_vertexBufferMemory, 0, buffSize, {}, &data);
+		memcpy(data, tempVertices.data(), buffSize);
+	m_device.unmapMemory(m_vertexBufferMemory);
+    */
+}
+void Context::createIndexBuffer()
+{
+	size_t buffSize = sizeof(tempIndices[0])*tempIndices.size();
+	//Transfer queue data transfer
+	vk::Buffer stagingBuffer;
+	vk::DeviceMemory stagingBufferMemory;
+	createBuffer(
+		buffSize,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		stagingBuffer,
+		stagingBufferMemory
+	);
+	void* data;
+	m_device.mapMemory(stagingBufferMemory, 0, buffSize, {}, &data);
+	memcpy(data, tempIndices.data(), buffSize);
+	m_device.unmapMemory(stagingBufferMemory);
+	createBuffer(
+		buffSize,
+		vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		m_indexBuffer,
+		m_indexBufferMemory
+	);
+	copyBuffer(stagingBuffer, m_indexBuffer, buffSize);
+	m_device.destroyBuffer(stagingBuffer);
+	m_device.freeMemory(stagingBufferMemory);
+}
+
 /**
  * Destruction utility fns
  */
+void Context::destroyVertexBuffer()
+{
+	m_device.destroyBuffer(m_vertexBuffer);
+	m_vertexBuffer = nullptr;
+	m_device.freeMemory(m_vertexBufferMemory);
+	m_vertexBufferMemory = nullptr;
+}
+void Context::destroyIndexBuffer()
+{
+	m_device.destroyBuffer(m_indexBuffer);
+	m_indexBuffer = nullptr;
+	m_device.freeMemory(m_indexBufferMemory);
+	m_indexBufferMemory = nullptr;
+}
 void Context::destroyFences()
 {
 	for (auto &fence : m_fences)
@@ -848,4 +943,72 @@ bool Context::isFullscreen()
 {
 	// Use window borders as a proxy to detect fullscreen.
 	return (SDL_GetWindowFlags(m_window) & SDL_WINDOW_BORDERLESS) == SDL_WINDOW_BORDERLESS;
+}
+unsigned int Context::findMemoryType(const unsigned int &typeFilter, const vk::MemoryPropertyFlags& properties) const
+{
+	vk::PhysicalDeviceMemoryProperties memoryProps = m_physicalDevice.getMemoryProperties();
+	for (unsigned int i = 0; i < memoryProps.memoryTypeCount; ++i)
+	{
+		if (typeFilter & (1 << i))
+		{//Correct type available
+			if ((memoryProps.memoryTypes[i].propertyFlags & properties) == properties)
+			{//And it has the right properties (e.g. host_coherent, can be mapped to host memory)
+				return i;
+			}
+		}
+	}
+	throw std::runtime_error("failed to find suitable memory type!");
+}
+void Context::createBuffer(const vk::DeviceSize &size, const vk::BufferUsageFlags &usage, const vk::MemoryPropertyFlags &properties, vk::Buffer& buffer, vk::DeviceMemory& bufferMemory) const
+{
+	//Define buffer
+	vk::BufferCreateInfo bufferInfo;
+	{
+		bufferInfo.flags = {};
+		bufferInfo.size = size;
+		bufferInfo.usage = usage;
+		bufferInfo.sharingMode = vk::SharingMode::eExclusive;
+	}
+	buffer = m_device.createBuffer(bufferInfo);
+	//Allocate memory
+	const vk::MemoryRequirements memReq = m_device.getBufferMemoryRequirements(buffer);
+	vk::MemoryAllocateInfo allocInfo;
+	{
+		allocInfo.allocationSize = memReq.size;
+		allocInfo.memoryTypeIndex = findMemoryType(memReq.memoryTypeBits, properties);
+	}
+	bufferMemory = m_device.allocateMemory(allocInfo);
+	m_device.bindBufferMemory(buffer, bufferMemory, 0);//Offset must be divisble by memReq.alignment
+}
+
+void Context::copyBuffer(const vk::Buffer &src, const vk::Buffer &dest, const vk::DeviceSize &size, const vk::DeviceSize &srcOffset, const vk::DeviceSize &dstOffset) const
+{
+	vk::CommandBufferAllocateInfo cbAllocInfo;
+	{
+		cbAllocInfo.level = vk::CommandBufferLevel::ePrimary;
+		cbAllocInfo.commandPool = m_commandPool;
+		cbAllocInfo.commandBufferCount = 1;
+	}
+	vk::CommandBuffer cb = m_device.allocateCommandBuffers(cbAllocInfo)[0];
+	vk::CommandBufferBeginInfo cbBeginInfo;
+	{
+		cbBeginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
+	}
+	cb.begin(cbBeginInfo);
+	vk::BufferCopy copyRegion;
+	{
+		copyRegion.srcOffset = srcOffset;
+		copyRegion.dstOffset = dstOffset;
+		copyRegion.size = size;
+	}
+	cb.copyBuffer(src, dest, 1, &copyRegion);
+	cb.end();
+	vk::SubmitInfo submitInfo;
+	{
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &cb;
+	}
+	m_graphicsQueue.submit(1, &submitInfo, nullptr);
+	m_graphicsQueue.waitIdle();
+	m_device.freeCommandBuffers(m_commandPool, 1, &cb);
 }
