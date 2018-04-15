@@ -13,6 +13,7 @@ struct UniformBufferObject {
 struct Vertex {
 	glm::vec2 pos;
 	glm::vec3 color;
+	glm::vec2 texCoord;
 	static vk::VertexInputBindingDescription getBindingDesc()
 	{
 		vk::VertexInputBindingDescription rtn;
@@ -23,9 +24,9 @@ struct Vertex {
 		}
 		return rtn;
 	}
-	static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDesc()
+	static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDesc()
 	{
-		std::array<vk::VertexInputAttributeDescription, 2> rtn;
+		std::array<vk::VertexInputAttributeDescription, 3> rtn;
 		{//Vertex
 			rtn[0].binding = 0;
 			rtn[0].location = 0;
@@ -38,14 +39,20 @@ struct Vertex {
 			rtn[1].format = vk::Format::eR32G32B32Sfloat;	//RGB 32bit (signed) floating point
 			rtn[1].offset = offsetof(Vertex, color);		//Position of pos within Vertex
 		}
+		{//Tex Coord
+			rtn[2].binding = 0;
+			rtn[2].location = 2;
+			rtn[2].format = vk::Format::eR32G32Sfloat;	//RG 32bit (signed) floating point
+			rtn[2].offset = offsetof(Vertex, texCoord);	//Position of pos within Vertex
+		}
 		return rtn;
 	}
 };
 static const std::vector<Vertex> tempVertices = {
-	{ { -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
-	{ { 0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f } },
-	{ { 0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } },
-	{ { -0.5f, 0.5f },{ 1.0f, 1.0f, 1.0f } }
+	{ { -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
+	{ { 0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
+	{ { 0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
+	{ { -0.5f, 0.5f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }
 };
 static const std::vector<uint16_t> tempIndices = {
 	0, 1, 2, 2, 3, 0
@@ -87,7 +94,7 @@ private:
 	vk::Rect2D t_scissors;
 	vk::PipelineColorBlendAttachmentState t_cbas;
 	vk::VertexInputBindingDescription t_vibd;
-	std::array<vk::VertexInputAttributeDescription, 2> t_viad;
+	std::array<vk::VertexInputAttributeDescription, 3> t_viad;
 };
 
 #endif //__GraphicsPipeline_h__

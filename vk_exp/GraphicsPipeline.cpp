@@ -193,8 +193,8 @@ vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState()
 {
 	//vk::PipelineColorBlendAttachmentState t_cbas;
 	{
-		t_cbas.blendEnable = false;
-		t_cbas.srcColorBlendFactor = vk::BlendFactor::eOne;
+		t_cbas.blendEnable = true;//Enable Alpha Blending!
+		t_cbas.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;
 		t_cbas.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
 		t_cbas.colorBlendOp = vk::BlendOp::eAdd;
 		t_cbas.srcAlphaBlendFactor = vk::BlendFactor::eOne;
@@ -209,8 +209,8 @@ vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState()
 		rtn.logicOp = vk::LogicOp::eCopy;
 		rtn.attachmentCount = 1;
 		rtn.pAttachments = &t_cbas;
-		rtn.blendConstants[0] = 0.0f;
-		rtn.blendConstants[1] = 0.0f;
+		rtn.blendConstants[0] = 0.0f;//These interact with blend factors which have a 'constant colour'
+		rtn.blendConstants[1] = 0.0f;//Otherwise they have no effect
 		rtn.blendConstants[2] = 0.0f;
 		rtn.blendConstants[3] = 0.0f;
 	}
