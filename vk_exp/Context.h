@@ -42,12 +42,12 @@ class Context
 	vk::SwapchainKHR m_swapchain = nullptr;
 	std::vector<vk::Image> m_scImages;
 	std::vector<vk::ImageView> m_scImageViews;
-	std::vector<vk::Framebuffer> m_scFramebuffers;
 	vk::PipelineCache m_pipelineCache = nullptr;
 	vk::CommandPool m_commandPool = nullptr;
-	std::vector<vk::CommandBuffer> m_commandBuffers;
 	vk::Semaphore m_imageAvailableSemaphore = nullptr;
 	vk::Semaphore m_renderingFinishedSemaphore = nullptr;
+	std::vector<vk::Framebuffer> m_scFramebuffers;
+	std::vector<vk::CommandBuffer> m_commandBuffers;
 	std::vector<vk::Fence> m_fences;
 	vk::Image m_textureImage;
 	vk::DeviceMemory m_textureImageMemory;
@@ -62,6 +62,9 @@ class Context
 	vk::DescriptorPool m_descriptorPool = nullptr;
 	vk::DescriptorSet m_descriptorSet = nullptr;
 	vk::DescriptorSetLayout m_descriptorSetLayout = nullptr;
+	vk::Image m_depthImage = nullptr;
+	vk::DeviceMemory m_depthImageMemory = nullptr;
+	vk::ImageView m_depthImageView = nullptr;
 
 	GraphicsPipeline *m_gfxPipeline = nullptr;
 #ifdef _DEBUG
@@ -116,8 +119,10 @@ private:
 	void createSwapchainImages();
 	void setupPipelineCache();
 	void createGraphicsPipeline();
-	void createFramebuffers();
 	void createCommandPool(unsigned int graphicsQIndex);//Redundant arg?
+	void createDepthResources();
+	void createFramebuffers();
+	void createCommandBuffers();
 	void createFences();
 	void fillCommandBuffers();
 	void createTextureImage();
@@ -139,9 +144,10 @@ private:
 	void destroyTextureImage();
 	void destroyFences();
 	void destroyCommandPool();
+	void destroyFramebuffers();
+	void destroyDepthResources();
 	void backupPipelineCache();
 	void destroyPipelineCache();
-	void destroyFramebuffers();
 	void destroySwapChainImages();
 	void destroySwapChain();
 	void destroyDescriptorPool();
@@ -154,15 +160,18 @@ private:
 	void createSwapchainStuff();
 	void destroySwapchainStuff();
 	unsigned int findMemoryType(const unsigned int &typeFilter, const vk::MemoryPropertyFlags& properties) const;
+	vk::Format findSupportedFormat(const std::vector<vk::Format>& candidates, const vk::ImageTiling &tiling, vk::FormatFeatureFlags features);
+	static bool hasStencilComponent(const vk::Format &format);
 	void createBuffer(const vk::DeviceSize &size, const vk::BufferUsageFlags &usage, const vk::MemoryPropertyFlags &properties, vk::Buffer& buffer, vk::DeviceMemory& bufferMemory) const;
 	void copyBuffer(const vk::Buffer &src, const vk::Buffer &dest, const vk::DeviceSize &size, const vk::DeviceSize &srcOffset = 0, const vk::DeviceSize &dstOffset = 0) const;
-	void createImage(const uint32_t &width, const uint32_t &height, const vk::Format &format, const vk::ImageTiling &tiling, const vk::ImageUsageFlags &usage, const vk::MemoryPropertyFlags &properties, vk::Image& image, vk::DeviceMemory& imageMemory);
+	void createImage(const uint32_t &width, const uint32_t &height, const vk::Format &format, const vk::ImageTiling &tiling, const vk::ImageUsageFlags &usage, const vk::MemoryPropertyFlags &properties, vk::Image& image, vk::DeviceMemory& imageMemory) const;
 	vk::CommandBuffer beginSingleTimeCommands() const;
 	void endSingleTimeCommands(vk::CommandBuffer &cb) const;
 	void transitionImageLayout(vk::Image &image, const vk::Format &format, const vk::ImageLayout &oldLayout, const vk::ImageLayout &newLayout) const;
 	void copyBufferToImage(const vk::Buffer &buffer, vk::Image &image, const uint32_t &width, const uint32_t &height) const;
-	vk::ImageView createImageView(const vk::Image &image, const vk::Format &format) const;
+	vk::ImageView createImageView(const vk::Image &image, const vk::Format &format, const vk::ImageAspectFlags aspectFlags) const;
 	public:
+	vk::Format findDepthFormat();
 	void toggleFullScreen();
 	bool isFullscreen();
 };

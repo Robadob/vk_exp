@@ -128,17 +128,22 @@ void Context::createSwapchainStuff()
 	createSwapchainImages();
 	//Create GFX pipeline? (framebuffer/commandpool dependent on this for renderpass)
 	createGraphicsPipeline();
+	//Create the command pool
+	createCommandPool(m_graphicsQueueId);
+	//Create the depth buffer stuff
+	createDepthResources();
 	//Create Framebuffer
 	createFramebuffers();
-	//Create the command pool and buffers, begin Renderpasses (inside each command buff)
-	createCommandPool(m_graphicsQueueId);
+	//Create the command buffers, begin Renderpasses (inside each command buff)
+	createCommandBuffers();
 }
 void Context::destroySwapchainStuff()
 {
 	destroyCommandPool();
+	destroyFramebuffers();
+	destroyDepthResources();
 	delete m_gfxPipeline;
 	m_gfxPipeline = nullptr;
-	destroyFramebuffers();
 	destroySwapChainImages();
 	destroySwapChain();
 }
@@ -423,13 +428,6 @@ void Context::createDescriptorPool()
 		descSetAllocInfo.pSetLayouts = layouts;
 	}
 	m_descriptorSet = m_device.allocateDescriptorSets(descSetAllocInfo)[0];
-
-	vk::DescriptorImageInfo imageInfo;
-	{
-		imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-		imageInfo.imageView = m_textureImageView;
-		imageInfo.sampler = m_textureSampler;
-	}
 }
 void Context::createSwapchain()
 {
@@ -501,19 +499,20 @@ void Context::createSwapchainImages()
 	m_scImageViews.resize(m_scImages.size());
 	for (size_t i = 0; i < m_scImageViews.size(); i++)
 	{
-		m_scImageViews[i] = createImageView(m_scImages[i], m_surfaceFormat.format);
+		m_scImageViews[i] = createImageView(m_scImages[i], m_surfaceFormat.format, vk::ImageAspectFlagBits::eColor);
 	}
 }
 void Context::createFramebuffers()
 {
 	m_scFramebuffers.resize(m_scImageViews.size());
 	for (size_t i = 0; i < m_scImageViews.size(); i++) {
-		vk::ImageView attachments[] = { m_scImageViews[i] };
+		//Can reuse depth as only one subpass operates at a time, due to use of semaphores
+		std::array<vk::ImageView, 2> attachments = { m_scImageViews[i], m_depthImageView };
 		vk::FramebufferCreateInfo fbCreate;
 		{
 			fbCreate.renderPass = m_gfxPipeline->RenderPass();
-			fbCreate.attachmentCount = 1;
-			fbCreate.pAttachments = attachments;
+			fbCreate.attachmentCount = (unsigned int)attachments.size();
+			fbCreate.pAttachments = attachments.data();
 			fbCreate.width = m_swapchainDims.width;
 			fbCreate.height = m_swapchainDims.height;
 			fbCreate.layers = 1;
@@ -569,6 +568,16 @@ void Context::createCommandPool(unsigned int graphicsQIndex)
 	}
 	m_commandPool = m_device.createCommandPool(commandPoolCreateInfo);
 	//createCommandBuffers();
+}
+void Context::createDepthResources()
+{
+	vk::Format depthFormat = findDepthFormat();
+	createImage(m_swapchainDims.width, m_swapchainDims.height, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::MemoryPropertyFlagBits::eDeviceLocal, m_depthImage, m_depthImageMemory);
+	m_depthImageView = createImageView(m_depthImage, depthFormat, vk::ImageAspectFlagBits::eDepth);
+	transitionImageLayout(m_depthImage, depthFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+}
+void Context::createCommandBuffers()
+{
 	vk::CommandBufferAllocateInfo commandBufferAllocInfo;
 	{
 		commandBufferAllocInfo.commandPool = m_commandPool;
@@ -608,15 +617,16 @@ void Context::fillCommandBuffers()
 		}
 		m_commandBuffers[i].begin(cbBegin);
 		vk::RenderPassBeginInfo rpBegin;
-		vk::ClearValue clearColor;
+		std::array<vk::ClearValue, 2> clearValues = {};
+		clearValues[0].color = vk::ClearColorValue(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
+		clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
 		{
 			rpBegin.renderPass = m_gfxPipeline->RenderPass();
 			rpBegin.framebuffer = m_scFramebuffers[i];
 			rpBegin.renderArea.offset = vk::Offset2D({ 0, 0 });
 			rpBegin.renderArea.extent = m_swapchainDims;
-			rpBegin.clearValueCount = 1;
-			clearColor.color = vk::ClearColorValue(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
-			rpBegin.pClearValues = &clearColor;
+			rpBegin.clearValueCount = (unsigned int)clearValues.size();
+			rpBegin.pClearValues = clearValues.data();
 		}
 		m_commandBuffers[i].beginRenderPass(rpBegin, vk::SubpassContents::eInline);
 		m_commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Pipeline());
@@ -687,7 +697,7 @@ void Context::createTextureImage()
 }
 void Context::createTextureImageView()
 {
-	m_textureImageView = createImageView(m_textureImage, vk::Format::eR8G8B8A8Unorm);
+	m_textureImageView = createImageView(m_textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor);
 }
 void Context::createTextureSampler()
 {
@@ -879,6 +889,12 @@ void Context::destroyFences()
 		m_device.destroyFence(fence);
 	}
 	m_fences.clear();
+}
+void Context::destroyDepthResources()
+{
+	m_device.destroyImageView(m_depthImageView);
+	m_device.destroyImage(m_depthImage);
+	m_device.freeMemory(m_depthImageMemory);
 }
 void Context::destroyCommandPool()
 {
@@ -1190,6 +1206,34 @@ unsigned int Context::findMemoryType(const unsigned int &typeFilter, const vk::M
 	}
 	throw std::runtime_error("failed to find suitable memory type!");
 }
+vk::Format Context::findSupportedFormat(const std::vector<vk::Format>& candidates, const vk::ImageTiling &tiling, vk::FormatFeatureFlags features)
+{
+	for (vk::Format format : candidates) 
+	{
+		vk::FormatProperties props = m_physicalDevice.getFormatProperties(format);
+		if (tiling == vk::ImageTiling::eLinear && (props.linearTilingFeatures & features) == features)
+		{
+			return format;
+		}
+		else if (tiling == vk::ImageTiling::eOptimal && (props.optimalTilingFeatures & features) == features)
+		{
+			return format;
+		}
+	}
+	throw std::runtime_error("Failed to find supported format! [findSupportedFormat()]");
+}
+vk::Format Context::findDepthFormat() 
+{
+	return findSupportedFormat(
+	{ vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint },
+		vk::ImageTiling::eOptimal,
+		vk::FormatFeatureFlagBits::eDepthStencilAttachment
+	);
+}
+bool Context::hasStencilComponent(const vk::Format &format) 
+{
+	return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint;
+}
 void Context::createBuffer(const vk::DeviceSize &size, const vk::BufferUsageFlags &usage, const vk::MemoryPropertyFlags &properties, vk::Buffer& buffer, vk::DeviceMemory& bufferMemory) const
 {
 	//Define buffer
@@ -1224,7 +1268,7 @@ void Context::copyBuffer(const vk::Buffer &src, const vk::Buffer &dest, const vk
 	cb.copyBuffer(src, dest, 1, &copyRegion);
 	endSingleTimeCommands(cb);
 }
-void Context::createImage(const uint32_t &width, const uint32_t &height, const vk::Format &format, const vk::ImageTiling &tiling, const vk::ImageUsageFlags &usage, const vk::MemoryPropertyFlags &properties, vk::Image& image, vk::DeviceMemory& imageMemory)
+void Context::createImage(const uint32_t &width, const uint32_t &height, const vk::Format &format, const vk::ImageTiling &tiling, const vk::ImageUsageFlags &usage, const vk::MemoryPropertyFlags &properties, vk::Image& image, vk::DeviceMemory& imageMemory) const
 {
 	vk::ImageCreateInfo imgCreate;
 	{
@@ -1250,7 +1294,7 @@ void Context::createImage(const uint32_t &width, const uint32_t &height, const v
 		memAllocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits, properties);
 	}
 	imageMemory = m_device.allocateMemory(memAllocInfo);
-	m_device.bindImageMemory(m_textureImage, imageMemory, 0);
+	m_device.bindImageMemory(image, imageMemory, 0);
 }
 vk::CommandBuffer Context::beginSingleTimeCommands() const
 {
@@ -1311,6 +1355,17 @@ void Context::transitionImageLayout(vk::Image &image, const vk::Format &format, 
 			srcStage = vk::PipelineStageFlagBits::eTransfer;
 			dstStage = vk::PipelineStageFlagBits::eFragmentShader;
 		}
+		else if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal)
+		{
+			barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
+			if (hasStencilComponent(format)) {
+				barrier.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
+			}
+			barrier.srcAccessMask = {};
+			barrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+			srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
+			dstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
+		}
 		else
 		{
 			throw std::invalid_argument("Unexpected layout transition!");
@@ -1344,14 +1399,14 @@ void Context::copyBufferToImage(const vk::Buffer &buffer, vk::Image &image, cons
 	cb.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, 1, &region);
 	endSingleTimeCommands(cb);
 }
-vk::ImageView Context::createImageView(const vk::Image &image, const vk::Format &format) const
+vk::ImageView Context::createImageView(const vk::Image &image, const vk::Format &format, const vk::ImageAspectFlags aspectFlags) const
 {
 	vk::ImageViewCreateInfo viewInfo;
 	{
 		viewInfo.image = image;
 		viewInfo.viewType = vk::ImageViewType::e2D;
 		viewInfo.format = format;
-		viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+		viewInfo.subresourceRange.aspectMask = aspectFlags;
 		viewInfo.subresourceRange.baseMipLevel = 0;
 		viewInfo.subresourceRange.levelCount = 1;
 		viewInfo.subresourceRange.baseArrayLayer = 0;

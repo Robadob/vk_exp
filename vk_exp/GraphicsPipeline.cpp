@@ -21,6 +21,7 @@ GraphicsPipeline::GraphicsPipeline(Context &ctx, const char * vertPath, const ch
 	auto vs = viewportState();
 	auto rs = rasterizerState();
 	auto ms = multisampleState();
+	auto dss = depthStencilState();
 	auto cbs = colorBlendState();
 	//auto ds = dynamicState();//Required if we wish to change viewport size at runtime
 
@@ -35,7 +36,7 @@ GraphicsPipeline::GraphicsPipeline(Context &ctx, const char * vertPath, const ch
 		pipelineInfo.pViewportState = &vs;
 		pipelineInfo.pRasterizationState = &rs;
 		pipelineInfo.pMultisampleState = &ms;
-		pipelineInfo.pDepthStencilState = nullptr;
+		pipelineInfo.pDepthStencilState = &dss;
 		pipelineInfo.pColorBlendState = &cbs;
 		pipelineInfo.pDynamicState = nullptr;
 		pipelineInfo.layout = m_pipelineLayout;
@@ -189,6 +190,23 @@ vk::PipelineMultisampleStateCreateInfo GraphicsPipeline::multisampleState() cons
 	return rtn;
 }
 
+vk::PipelineDepthStencilStateCreateInfo GraphicsPipeline::depthStencilState() const
+{
+	vk::PipelineDepthStencilStateCreateInfo rtn;
+	{
+		rtn.depthTestEnable = true;
+		rtn.depthWriteEnable = true;
+		rtn.depthCompareOp = vk::CompareOp::eLess;
+		rtn.depthBoundsTestEnable = false;
+		rtn.minDepthBounds = 0.0f; // Optional
+		rtn.maxDepthBounds = 1.0f; // Optional
+		rtn.stencilTestEnable = false;
+		rtn.front = vk::StencilOp::eKeep; // Optional
+		rtn.back = vk::StencilOp::eKeep; // Optional
+	}
+	return rtn;
+}
+
 vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState()
 {
 	//vk::PipelineColorBlendAttachmentState t_cbas;
@@ -231,23 +249,41 @@ vk::PipelineLayout GraphicsPipeline::pipelineLayout()
 }
 vk::RenderPass GraphicsPipeline::renderPass() const
 {
-	vk::AttachmentDescription attachDesc;
+	vk::AttachmentDescription colorAttachment;
 	{
-		attachDesc.flags = {};
-		attachDesc.format = m_context.SurfaceFormat().format;
-		attachDesc.samples = vk::SampleCountFlagBits::e1;
-		attachDesc.loadOp = vk::AttachmentLoadOp::eClear;
-		attachDesc.storeOp = vk::AttachmentStoreOp::eStore;
-		attachDesc.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-		attachDesc.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-		attachDesc.initialLayout = vk::ImageLayout::eUndefined;
-		attachDesc.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+		colorAttachment.flags = {};
+		colorAttachment.format = m_context.SurfaceFormat().format;
+		colorAttachment.samples = vk::SampleCountFlagBits::e1;
+		colorAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+		colorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+		colorAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+		colorAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+		colorAttachment.initialLayout = vk::ImageLayout::eUndefined;
+		colorAttachment.finalLayout = vk::ImageLayout::ePresentSrcKHR;
 	}
 	vk::AttachmentReference colorAttachmentRef;
 	{
 		colorAttachmentRef.attachment = 0;
 		colorAttachmentRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
 	}
+	vk::AttachmentDescription depthAttachment;
+	{
+		depthAttachment.flags = {};
+		depthAttachment.format = m_context.findDepthFormat();
+		depthAttachment.samples = vk::SampleCountFlagBits::e1;
+		depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+		depthAttachment.storeOp = vk::AttachmentStoreOp::eDontCare;
+		depthAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+		depthAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+		depthAttachment.initialLayout = vk::ImageLayout::eUndefined;
+		depthAttachment.finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+	}
+	vk::AttachmentReference depthAttachmentRef;
+	{
+		depthAttachmentRef.attachment = 1;
+		depthAttachmentRef.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+	}
+	std::array<vk::AttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
 	vk::SubpassDescription subpass;
 	{
 		subpass.flags = {};
@@ -257,7 +293,7 @@ vk::RenderPass GraphicsPipeline::renderPass() const
 		subpass.colorAttachmentCount = 1;
 		subpass.pColorAttachments = &colorAttachmentRef;
 		subpass.pResolveAttachments = nullptr;
-		subpass.pDepthStencilAttachment = nullptr;
+		subpass.pDepthStencilAttachment = &depthAttachmentRef;
 		subpass.preserveAttachmentCount = 0;
 		subpass.pPreserveAttachments = nullptr;
 	}
@@ -267,15 +303,15 @@ vk::RenderPass GraphicsPipeline::renderPass() const
 		spDependency.dstSubpass = 0;//Index of subpass
 		spDependency.srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 		spDependency.srcAccessMask = vk::AccessFlags();
-		//Wait for swapchaun to finish reading from image
+		//Wait for swapchain to finish reading from image
 		spDependency.dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 		spDependency.dstAccessMask = vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
 	}
 	vk::RenderPassCreateInfo rpInfo;
 	{
 		rpInfo.flags = {};
-		rpInfo.attachmentCount = 1;
-		rpInfo.pAttachments = &attachDesc;
+		rpInfo.attachmentCount = (unsigned int)attachments.size();
+		rpInfo.pAttachments = attachments.data();
 		rpInfo.subpassCount = 1;
 		rpInfo.pSubpasses = &subpass;
 		rpInfo.dependencyCount = 1;

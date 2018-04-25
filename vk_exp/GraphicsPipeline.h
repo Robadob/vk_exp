@@ -3,7 +3,8 @@
 #include <vector>
 #include <vulkan/vulkan.hpp>
 class Context;
-
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE //Vulkan prefers depth range 0 - 1, GL uses -1 - 1
 #include <glm/glm.hpp>
 struct UniformBufferObject {
 	glm::mat4 model;
@@ -11,7 +12,7 @@ struct UniformBufferObject {
 	glm::mat4 proj;
 };
 struct Vertex {
-	glm::vec2 pos;
+	glm::vec3 pos;
 	glm::vec3 color;
 	glm::vec2 texCoord;
 	static vk::VertexInputBindingDescription getBindingDesc()
@@ -30,7 +31,7 @@ struct Vertex {
 		{//Vertex
 			rtn[0].binding = 0;
 			rtn[0].location = 0;
-			rtn[0].format = vk::Format::eR32G32Sfloat;	//RG 32bit (signed) floating point
+			rtn[0].format = vk::Format::eR32G32B32Sfloat;	//RGB 32bit (signed) floating point
 			rtn[0].offset = offsetof(Vertex, pos);		//Position of pos within Vertex
 		}
 		{//Colour
@@ -48,13 +49,20 @@ struct Vertex {
 		return rtn;
 	}
 };
-static const std::vector<Vertex> tempVertices = {
-	{ { -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
-	{ { 0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
-	{ { 0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
-	{ { -0.5f, 0.5f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }
+const std::vector<Vertex> tempVertices = {
+	{ { -0.5f, -0.5f, 0.0f },{ 1.0f, 0.0f, 0.0f },{ 0.0f, 0.0f } },
+	{ { 0.5f, -0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f },{ 1.0f, 0.0f } },
+	{ { 0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f },{ 1.0f, 1.0f } },
+	{ { -0.5f, 0.5f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 0.0f, 1.0f } },
+
+	{ { -0.5f, -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f },{ 0.0f, 0.0f } },
+	{ { 0.5f, -0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f },{ 1.0f, 0.0f } },
+	{ { 0.5f, 0.5f, -0.5f },{ 0.0f, 0.0f, 1.0f },{ 1.0f, 1.0f } },
+	{ { -0.5f, 0.5f, -0.5f },{ 1.0f, 1.0f, 1.0f },{ 0.0f, 1.0f } }
 };
+//Render in back to front order for transparency/blending
 static const std::vector<uint16_t> tempIndices = {
+	4, 5, 6, 6, 7, 4,
 	0, 1, 2, 2, 3, 0
 };
 /**
@@ -81,6 +89,7 @@ private:
 	vk::PipelineViewportStateCreateInfo viewportState();
 	vk::PipelineRasterizationStateCreateInfo rasterizerState() const;
 	vk::PipelineMultisampleStateCreateInfo multisampleState() const;
+	vk::PipelineDepthStencilStateCreateInfo depthStencilState() const;
 	vk::PipelineColorBlendStateCreateInfo colorBlendState();
 	vk::PipelineLayout pipelineLayout();
 	vk::RenderPass renderPass() const;
