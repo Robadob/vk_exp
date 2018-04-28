@@ -4,6 +4,7 @@
 #undef main //SDL breaks the regular main entry point, this fixes
 #include <vulkan/vulkan.hpp>
 #include <atomic>
+#include <glm/glm.hpp>
 class GraphicsPipeline;
 #ifdef _DEBUG
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugLayerCallback(
@@ -70,8 +71,11 @@ class Context
 #ifdef _DEBUG
 	vk::DebugReportCallbackEXT m_debugCallback = nullptr;
 #endif
+	//External data (read only access)
+	const glm::mat4 *e_viewMat = nullptr;
 public:
 	void init(unsigned int width = 1280, unsigned int height = 720, const char * title = "vk_exp");
+	void setViewMatPtr(const glm::mat4 *viewMat) { e_viewMat = viewMat; };
 	bool ready() const { return isInit.load(); }
 	void destroy();
 	const vk::Device &Device() const { return m_device; }

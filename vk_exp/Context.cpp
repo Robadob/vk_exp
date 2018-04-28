@@ -364,16 +364,16 @@ void Context::createLogicalDevice(unsigned int graphicsQIndex, unsigned int pres
     m_dynamicLoader = vk::DispatchLoaderDynamic(m_instance, m_device);
 }
 vk::PresentModeKHR Context::selectPresentMode()
-{
+{//https://vulkan.lunarg.com/doc/view/1.0.26.0/linux/vkspec.chunked/ch29s05.html#VkPresentModeKHR
 	std::vector<vk::PresentModeKHR> pm = m_physicalDevice.getSurfacePresentModesKHR(m_surface);
-	vk::PresentModeKHR bestMode = vk::PresentModeKHR::eFifo;
+	vk::PresentModeKHR bestMode = vk::PresentModeKHR::eFifo;//Vsync
 	for (const auto& availablePresentMode : pm) {
-		if (availablePresentMode == vk::PresentModeKHR::eMailbox) {
+		if (availablePresentMode == vk::PresentModeKHR::eMailbox) {//Vsync where fast frames cause frames to be skipped if 2nd is delivered before vsync barrier
 			return availablePresentMode;
 		}
-		else if (availablePresentMode == vk::PresentModeKHR::eImmediate) {
-			bestMode = availablePresentMode;
-		}
+		//else if (availablePresentMode == vk::PresentModeKHR::eImmediate) {//Immediate mode, not support on NV?
+		//	bestMode = availablePresentMode;
+		//}
 	}
 	return bestMode;
 }
@@ -1094,7 +1094,7 @@ void Context::updateUniformBuffer()
 	//Spin around z axis
 	UniformBufferObject ubo = {};
 	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.view = e_viewMat ? *e_viewMat : glm::mat4();
 	ubo.proj = glm::perspective(glm::radians(45.0f), m_swapchainDims.width / (float)m_swapchainDims.height, 0.1f, 10.0f);
 	ubo.proj[1][1] *= -1;
 	//Copy to uniform buffer
