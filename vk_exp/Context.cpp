@@ -364,16 +364,16 @@ void Context::createLogicalDevice(unsigned int graphicsQIndex, unsigned int pres
     m_dynamicLoader = vk::DispatchLoaderDynamic(m_instance, m_device);
 }
 vk::PresentModeKHR Context::selectPresentMode()
-{
+{//https://vulkan.lunarg.com/doc/view/1.0.26.0/linux/vkspec.chunked/ch29s05.html#VkPresentModeKHR
 	std::vector<vk::PresentModeKHR> pm = m_physicalDevice.getSurfacePresentModesKHR(m_surface);
-	vk::PresentModeKHR bestMode = vk::PresentModeKHR::eFifo;
+	vk::PresentModeKHR bestMode = vk::PresentModeKHR::eFifo;//Vsync
 	for (const auto& availablePresentMode : pm) {
-		if (availablePresentMode == vk::PresentModeKHR::eMailbox) {
+		if (availablePresentMode == vk::PresentModeKHR::eMailbox) {//Vsync where fast frames cause frames to be skipped if 2nd is delivered before vsync barrier
 			return availablePresentMode;
 		}
-		else if (availablePresentMode == vk::PresentModeKHR::eImmediate) {
-			bestMode = availablePresentMode;
-		}
+		//else if (availablePresentMode == vk::PresentModeKHR::eImmediate) {//Immediate mode, not support on NV?
+		//	bestMode = availablePresentMode;
+		//}
 	}
 	return bestMode;
 }

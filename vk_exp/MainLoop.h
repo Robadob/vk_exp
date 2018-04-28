@@ -23,7 +23,7 @@ private:
 	void loop();
 	void loopAsync();
 	void handleMouseMove(int x, int y);
-	void handleKeyboardState(const Uint8 *state);
+	void handleKeyboardState(const Uint8 *state, unsigned int&frameTime);
 	void handleKeypress(SDL_Keycode keycode, int x, int y);
 	void toggleMouseMode();
 	void drawFrame();
