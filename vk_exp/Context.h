@@ -62,7 +62,7 @@ class Context
 	vk::Buffer m_uniformBuffer = nullptr;
 	vk::DeviceMemory m_uniformBufferMemory = nullptr;
 	vk::DescriptorPool m_descriptorPool = nullptr;
-	vk::DescriptorSet m_descriptorSet = nullptr;
+	std::vector<vk::DescriptorSet> m_descriptorSets;
 	vk::Image m_depthImage = nullptr;
 	vk::DeviceMemory m_depthImageMemory = nullptr;
 	vk::ImageView m_depthImageView = nullptr;
@@ -83,6 +83,7 @@ public:
 	const vk::Extent2D &SurfaceDims() const { return m_swapchainDims; }
 	const vk::SurfaceFormatKHR &SurfaceFormat() const { return m_surfaceFormat; }
 	const vk::PipelineCache &PipelineCache() const { return m_pipelineCache; }
+	GraphicsPipeline &Pipeline() { return *m_gfxPipeline;  }
 	/**
 	 * Could switch to the active rebuild swapChainCreateInfo.oldSwapchain = m_swapChain; method
 	 */

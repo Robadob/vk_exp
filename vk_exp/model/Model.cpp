@@ -7,7 +7,110 @@
 #include "../StringUtils.h"
 #include "../Context.h"
 #include "../GraphicsPipeline.h"
+#include "../Image2D.h"
 
+ModelData::ModelData(
+	Context &context,
+	size_t vertices,
+	size_t normals,
+	size_t colors,
+	size_t texcoords,
+	size_t bones,
+	size_t materials,
+	size_t faces,
+	size_t transforms
+)
+	: m_context(context)
+	, vertices(nullptr)
+	, normals(nullptr)
+	, colors(nullptr)
+	, texcoords(nullptr)
+	, bones(nullptr)
+	, materials(nullptr)
+	, faces(nullptr)
+	, transforms(nullptr)
+	, verticesSize(vertices)
+	, normalsSize(normals)
+	, colorsSize(colors)
+	, texcoordsSize(texcoords)
+	, bonesSize(bones)
+	, materialsSize(materials)
+	, facesSize(faces)
+	, transformsSize(transforms)
+
+{
+	this->vertices = static_cast<glm::vec3 *>(malloc(vertices * sizeof(glm::vec3)));
+	if (normals)
+		this->normals = static_cast<glm::vec3 *>(malloc(normals * sizeof(glm::vec3)));
+	if (colors)
+		this->colors = static_cast<glm::vec4 *>(malloc(colors * sizeof(glm::vec4)));
+	if (texcoords)
+		this->texcoords = static_cast<glm::vec2 *>(malloc(texcoords * sizeof(glm::vec2)));
+
+	if (bones)
+		this->bones = static_cast<Bone *>(malloc(bones * sizeof(Bone)));
+
+	if (materials)
+	{
+		this->materials = static_cast<std::shared_ptr<Material> *>(malloc(materials * sizeof(std::shared_ptr<Material>)));
+		for (unsigned int i = 0; i < materials; ++i)
+		{
+			new(&this->materials[i]) std::shared_ptr<Material>();
+			this->materials[i] = std::make_shared<Material>();
+		}
+
+		{//Allocate pools to create one for each material
+			std::array<vk::DescriptorPoolSize, 1> poolSizes;
+			{
+				poolSizes[0].type = vk::DescriptorType::eCombinedImageSampler;
+				poolSizes[0].descriptorCount = materials;
+			}
+			vk::DescriptorPoolCreateInfo poolCreateInfo;
+			{
+				poolCreateInfo.poolSizeCount = (unsigned int)poolSizes.size();
+				poolCreateInfo.pPoolSizes = poolSizes.data();
+				poolCreateInfo.maxSets = materials;//1 per diffuse texture
+				poolCreateInfo.flags = {};
+			}
+			m_descriptorPool = m_context.Device().createDescriptorPool(poolCreateInfo);
+			std::vector<vk::DescriptorSetLayout> descSets;
+			descSets.resize(materials);
+			std::fill(descSets.begin(), descSets.end(), *m_context.Pipeline().Layout().textureSamplerSetLayout());
+			vk::DescriptorSetAllocateInfo descSetAllocInfo;
+			{
+				descSetAllocInfo.descriptorPool = m_descriptorPool;
+				descSetAllocInfo.descriptorSetCount = descSets.size();
+				descSetAllocInfo.pSetLayouts = descSets.data();
+			}
+			//Create set per material and attach
+			m_descriptorSets = m_context.Device().allocateDescriptorSets(descSetAllocInfo);
+			for (unsigned int i = 0; i<materials; ++i)
+			{
+				this->materials[i]->setDescriptorSet(m_descriptorSets[i]);
+			}
+		}
+	}
+
+	this->faces = static_cast<unsigned int *>(malloc(faces * sizeof(unsigned int)));
+	this->transforms = static_cast<glm::mat4 *>(malloc(transforms * sizeof(glm::mat4)));
+}
+ModelData::~ModelData()
+{
+	//Free memory
+	free(vertices);
+	free(normals);
+	free(colors);
+	free(texcoords);
+	free(bones);
+	//Call destructor on materials
+	for (unsigned int i = 0; i < materialsSize;++i)
+	    this->materials[i].~shared_ptr();
+	if(m_descriptorPool)
+		m_context.Device().destroyDescriptorPool(m_descriptorPool);//Automatically destroys all child sets
+	free(materials);
+	free(faces);
+	free(transforms);
+}
 Model::Model(Context &context, const char *modelPath, float scale)
     : m_context(context)
 	, root(nullptr)
@@ -215,6 +318,7 @@ void Model::loadModel()
     this->vfc = countVertices(scene, scene->mRootNode);
     //Allocate memory
     this->data = std::make_shared<ModelData>(
+		m_context,
         vfc.v,
         scene->mMeshes[0]->HasNormals() ? vfc.v : 0,
         scene->mMeshes[0]->mColors[0] != nullptr ? vfc.v : 0,
@@ -253,14 +357,17 @@ void Model::loadModel()
             {
 				aiString name;
 				scene->mMaterials[i]->Get(AI_MATKEY_NAME, name);
-                //data->materials[i] = std::make_shared<Material>(name.C_Str());
+                data->materials[i]->setName(name.C_Str());
 				//Temporary till proper mat tex handling added
-				fprintf(stderr, "%s(%d): Automatic texture loading of models is not yet supported.\n", __FILE__, __LINE__);
-				//data->materials[i]->addTexture(Texture::make_shared(path.data, modelFolder.c_str()));
+				data->materials[i]->addTexture(std::make_shared<Image2D>(m_context, path.data, modelFolder.c_str()));
                 texIndex++;
             }
         }
       //TODO
+    }
+	//Allocate descriptor pool for materials
+    {
+
     }
 
     //Convert assimp hierarchy to our custom hierarchy
@@ -385,7 +492,7 @@ void Model::render(vk::CommandBuffer &cb, GraphicsPipeline &pipeline)
 	//Bind to pipeline
 	cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.Pipeline());
 	auto layout = pipeline.Layout().get();
-	//cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, 0, { m_descriptorSet }, {});//We might require this if we start doing model transforms in the shader with bones
+	//cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout, 0, { m_descriptorSets }, {});//We might require this if we start doing model transforms in the shader with bones
 	VkDeviceSize offsets[] = { 0 };
 	cb.bindVertexBuffers(0, 1, m_vertexBuffer->getPtr(), offsets);
 	cb.bindIndexBuffer(m_indexBuffer->get(), 0, vk::IndexType::eUint32);

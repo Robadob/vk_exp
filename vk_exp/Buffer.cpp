@@ -63,7 +63,7 @@ void Buffer::copy(const vk::Buffer &src, const vk::Buffer &dest, const vk::Devic
 void Buffer::setData(const void *src, const size_t size, const vk::DeviceSize &destOffset)
 {
 #ifdef _DEBUG
-	assert(destOffset + size < m_size);
+	assert(destOffset + size <= m_size);
 #endif
 	if ((vk::MemoryPropertyFlags(m_memoryProperties) &= vk::MemoryPropertyFlagBits::eHostCoherent) == vk::MemoryPropertyFlagBits::eHostCoherent)
 	{//Mapped copy if memory is coherent

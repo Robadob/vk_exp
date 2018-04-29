@@ -65,9 +65,12 @@ public:
 class StagingBuffer : public Buffer
 {
 public:
-	StagingBuffer(Context &context, const vk::DeviceSize &size)
+	StagingBuffer(Context &context, const vk::DeviceSize &size, void *data=nullptr)
 		:Buffer(context, size, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent)
-	{	}
+	{
+		if (data)
+			setData(data, size);
+	}
 	void resize(const vk::DeviceSize &size) { Buffer::resize(size); }
 	
 };

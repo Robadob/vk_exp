@@ -7,7 +7,6 @@
 #include <set>
 #include <chrono>
 #include <glm/gtc/matrix_transform.hpp>
-#define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 #include "model/Model.h"
 
@@ -396,18 +395,18 @@ void Context::createDescriptorPool()
 	{
 		poolCreateInfo.poolSizeCount = (unsigned int)poolSizes.size();
 		poolCreateInfo.pPoolSizes = poolSizes.data();
-		poolCreateInfo.maxSets = 1;
+		poolCreateInfo.maxSets = 2;
 		poolCreateInfo.flags = {};
 	}
 	m_descriptorPool = m_device.createDescriptorPool(poolCreateInfo);
-	assert(m_gfxPipeline->Layout().descriptorSetLayoutsSize() == 1);
+	assert(m_gfxPipeline->Layout().descriptorSetLayoutsSize() == 2);
 	vk::DescriptorSetAllocateInfo descSetAllocInfo;
 	{
 		descSetAllocInfo.descriptorPool = m_descriptorPool;
 		descSetAllocInfo.descriptorSetCount = m_gfxPipeline->Layout().descriptorSetLayoutsSize();
-		descSetAllocInfo.pSetLayouts = m_gfxPipeline->Layout().descriptorSetLayouts();
+		descSetAllocInfo.pSetLayouts = m_gfxPipeline->Layout().descriptorSetLayouts().data();
 	}
-	m_descriptorSet = m_device.allocateDescriptorSets(descSetAllocInfo)[0];
+	m_descriptorSets = m_device.allocateDescriptorSets(descSetAllocInfo);
 }
 void Context::createSwapchain()
 {
@@ -609,7 +608,7 @@ void Context::fillCommandBuffers()
 			rpBegin.pClearValues = clearValues.data();
 		}
 		m_commandBuffers[i].beginRenderPass(rpBegin, vk::SubpassContents::eInline);
-		m_commandBuffers[i].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Layout().get(), 0, { m_descriptorSet }, {});
+		m_commandBuffers[i].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Layout().get(), 0, { m_descriptorSets }, {});
 		//m_commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Pipeline());
 		//VkDeviceSize offsets[] = { 0 };
 		//m_commandBuffers[i].bindVertexBuffers(0, 1, &m_vertexBuffer, offsets);
@@ -801,7 +800,7 @@ void Context::updateDescriptorSet()
 	}
 	std::array<vk::WriteDescriptorSet, 2> descWrites;
 	{
-		descWrites[0].dstSet = m_descriptorSet;
+		descWrites[0].dstSet = m_descriptorSets[0];
 		descWrites[0].dstBinding = 0;
 		descWrites[0].dstArrayElement = 0;
 		descWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
@@ -811,8 +810,8 @@ void Context::updateDescriptorSet()
 		descWrites[0].pTexelBufferView = nullptr;
 	}
 	{
-		descWrites[1].dstSet = m_descriptorSet;
-		descWrites[1].dstBinding = 1;
+		descWrites[1].dstSet = m_descriptorSets[1];
+		descWrites[1].dstBinding = 0;
 		descWrites[1].dstArrayElement = 0;
 		descWrites[1].descriptorType = vk::DescriptorType::eCombinedImageSampler;
 		descWrites[1].descriptorCount = 1;
@@ -943,7 +942,7 @@ void Context::destroyDescriptorPool()
 {
 	m_device.destroyDescriptorPool(m_descriptorPool);
 	m_descriptorPool = nullptr;
-	m_descriptorSet = nullptr;
+	m_descriptorSets.clear();
 }
 void Context::destroyLogicalDevice()
 {

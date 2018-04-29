@@ -1,9 +1,14 @@
 #ifndef __Material_h__
 #define __Material_h__
-#include "../Texture/Texture.h"
-#include "../interface/HasMatrices.h"
-#include "../shader/ShaderHeader.h"
-class Material : protected HasMatrices
+#include <glm/glm.hpp>
+#include <string>
+#include <vector>
+#include <map>
+#include <memory>
+#include "ShaderHeader.h"
+#include <vulkan/vulkan.hpp>
+class Image2D;
+class Material
 {
     /**
      * Pointer to the last used material
@@ -53,13 +58,13 @@ class Material : protected HasMatrices
             SmoothAdd,      //(T1 + T2) - (T1 * T2)
             SignedAdd       //T1 + (T2-0.5)
         };
-        std::shared_ptr<Texture> texture;
+        std::shared_ptr<Image2D> texture;
         float weight=1.0f;//This value is multiplied by the textures color
         float uvIndex=0;//Some meshes have dual texture coordinates
         BlendOperation operation;//How to process the n-1 texture?
         //MAPPING: aiProcess_GenUVCoords() to convert coords 
-        GLenum mappingModeU;//GL_TEXTURE_WRAP_S=GL_CLAMP_TO_EDGE, GL_MIRRORED_REPEAT, or GL_REPEAT.
-        GLenum mappingModeV;//GL_TEXTURE_WRAP_T=GL_CLAMP_TO_EDGE, GL_MIRRORED_REPEAT, or GL_REPEAT.
+        //GLenum mappingModeU;//GL_TEXTURE_WRAP_S=GL_CLAMP_TO_EDGE, GL_MIRRORED_REPEAT, or GL_REPEAT.
+        //GLenum mappingModeV;//GL_TEXTURE_WRAP_T=GL_CLAMP_TO_EDGE, GL_MIRRORED_REPEAT, or GL_REPEAT.
         bool isDecal=false;//Invalid tex coords cause frame dump
         bool invertColor = false;//color=1-color
         bool useAlpha = true;//useAlpha if present
@@ -99,17 +104,13 @@ public:
     void setWireframe(const bool isWireframe) { this->isWireframe = isWireframe; };
 	void setTwoSided(const bool twoSided) { this->faceCull = !twoSided; };
     void setShadingMode(const ShadingMode shaderMode) { this->shaderMode = shaderMode; };
-    void setShader(const std::shared_ptr<Shaders> shader)
-    {
-        //We should make a copy of this shader
-        this->shaders = shader;
-    };
-	void addTexture(std::shared_ptr<Texture> texPtr, TextureType type = Diffuse);
+	void addTexture(std::shared_ptr<Image2D> texPtr, TextureType type = Diffuse);
+	void setDescriptorSet(vk::DescriptorSet descSet);
 
     /**
      * @see glBlendFunc()
      */
-    void setAlphaBlendMode(const GLenum sfactor, const GLenum dfactor) { this->alphaBlendMode[0] = sfactor; this->alphaBlendMode[1] = dfactor; };
+    //void setAlphaBlendMode(const GLenum sfactor, const GLenum dfactor) { this->alphaBlendMode[0] = sfactor; this->alphaBlendMode[1] = dfactor; };
 
     //Getters
     std::string getName() const { return name; };
@@ -125,14 +126,12 @@ public:
     bool getWireframe() const { return isWireframe; };
     bool getTwoSided() const { return !faceCull; };
     ShadingMode getShadingMode() const { return shaderMode; };
-    std::shared_ptr<Shaders> getShaders() const { return shaders; };
-    std::pair<GLenum, GLenum> getAlphaBlendMode() const { return std::make_pair(alphaBlendMode[0], alphaBlendMode[1]); };
+    //std::pair<GLenum, GLenum> getAlphaBlendMode() const { return std::make_pair(alphaBlendMode[0], alphaBlendMode[1]); };
 private:
     //Id
     std::string name;
-
-    MaterialProperties properties;
-    GLuint propertiesUniformBuffer;
+	vk::DescriptorSet m_descriptorSet = nullptr;
+	MaterialProperties properties;//?
     void updatePropertiesUniform();
     //Textures
     std::map<TextureType, std::vector<TextureFrame>> textures;
@@ -140,32 +139,6 @@ private:
     bool isWireframe;
     bool faceCull;
     ShadingMode shaderMode;
-    std::shared_ptr<Shaders> shaders;
-    GLenum alphaBlendMode[2]; //GL_SRC_ALPHA, GL_ONE for additive blending//GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA for default
-//HasMatrices overrides
-public:
-    /**
-    * Sets the pointer from which the View matrix should be loaded from
-    * @param viewMat A pointer to the viewMatrix to be tracked
-    * @note This pointer is likely provided by a Camera subclass
-    */
-    virtual void setViewMatPtr(const glm::mat4  *viewMat) override;
-    /**
-    * Sets the pointer from which the Projection matrix should be loaded from
-    * @param projectionMat A pointer to the projectionMatrix to be tracked
-    * @note This pointer is likely provided by the Visualisation object
-    */
-    virtual void setProjectionMatPtr(const glm::mat4 *projectionMat) override;
-    /**
-    * Sets the pointer from which the Model matrix should be loaded from
-    * @param modelMat A pointer to the modelMatrix to be tracked
-    * @note This pointer is likely provided by the Visualisation object
-    */
-    void setModelMatPtr(const glm::mat4 *modelMat) override;
-    /**
-    * Overrides the model matrix (and all dependent matrices) until useProgram() is next called
-    * @param modelMat Pointer to the overriding modelMat
-    */
-    virtual void overrideModelMat(const glm::mat4 *modelMat) override;
+    //GLenum alphaBlendMode[2]; //GL_SRC_ALPHA, GL_ONE for additive blending//GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA for default
 };
 #endif //__Material_h__

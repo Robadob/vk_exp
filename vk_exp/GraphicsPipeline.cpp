@@ -245,7 +245,7 @@ vk::PipelineLayout GraphicsPipeline::pipelineLayout()
 	{
 		pipelineLayoutInfo.flags = {};
 		pipelineLayoutInfo.setLayoutCount = m_pipelineLayout.descriptorSetLayoutsSize();
-		pipelineLayoutInfo.pSetLayouts = m_pipelineLayout.descriptorSetLayouts();//Uniform bindings
+		pipelineLayoutInfo.pSetLayouts = m_pipelineLayout.descriptorSetLayouts().data();//Uniform bindings
 		pipelineLayoutInfo.pushConstantRangeCount = 1;
 		pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 	}

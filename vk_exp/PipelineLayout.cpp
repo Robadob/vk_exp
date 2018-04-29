@@ -39,7 +39,20 @@ void PipelineLayout::genPushConstants()
 
 void PipelineLayout::genDescriptorSetLayouts()
 {
-	assert(m_descriptorSetLayouts.size() == 1);
+	assert(m_descriptorSetLayouts.size() == 2);
+	std::array<vk::DescriptorSetLayoutBinding, 1> bindings;
+	bindings[0]= { GlobalsUniformBufferBinding() };
+	vk::DescriptorSetLayoutCreateInfo descSetCreateInfo;
+	{
+		descSetCreateInfo.bindingCount = (unsigned int)bindings.size();
+		descSetCreateInfo.pBindings = bindings.data();
+	}
+	m_descriptorSetLayouts[0] = m_context.Device().createDescriptorSetLayout(descSetCreateInfo);
+	bindings[0] = { TextureSamplerBinding() };
+	m_descriptorSetLayouts[1] = m_context.Device().createDescriptorSetLayout(descSetCreateInfo);
+}
+vk::DescriptorSetLayoutBinding PipelineLayout::GlobalsUniformBufferBinding() const
+{
 	/*Uniform Buffer Descriptor Set Layout*/
 	vk::DescriptorSetLayoutBinding uniformBufferLayoutBinding;
 	{
@@ -49,20 +62,18 @@ void PipelineLayout::genDescriptorSetLayouts()
 		uniformBufferLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
 		uniformBufferLayoutBinding.pImmutableSamplers = nullptr;
 	}
+	return uniformBufferLayoutBinding;
+}
+vk::DescriptorSetLayoutBinding PipelineLayout::TextureSamplerBinding() const
+{
 	/*Texture Sampler Descriptor Set Layout*/
 	vk::DescriptorSetLayoutBinding textureSamplerLayoutBinding;
 	{
-		textureSamplerLayoutBinding.binding = 1;
+		textureSamplerLayoutBinding.binding = 0;
 		textureSamplerLayoutBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
 		textureSamplerLayoutBinding.descriptorCount = 1;
 		textureSamplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 		textureSamplerLayoutBinding.pImmutableSamplers = nullptr;
 	}
-	std::array<vk::DescriptorSetLayoutBinding, 2> bindings = { uniformBufferLayoutBinding, textureSamplerLayoutBinding };
-	vk::DescriptorSetLayoutCreateInfo descSetCreateInfo;
-	{
-		descSetCreateInfo.bindingCount = (unsigned int)bindings.size();
-		descSetCreateInfo.pBindings = bindings.data();
-	}
-	m_descriptorSetLayouts[0] = m_context.Device().createDescriptorSetLayout(descSetCreateInfo);	
+	return textureSamplerLayoutBinding;
 }

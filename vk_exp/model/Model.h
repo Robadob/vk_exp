@@ -5,7 +5,7 @@
 #include "ModelNode.h"
 //#include "../shader/Shaders.h"
 #include "Bone.h"
-//#include "Material.h"
+#include "Material.h"
 #include "BoundingBox.h"
 #include "../Buffer.h"
 class GraphicsPipeline;
@@ -30,6 +30,7 @@ struct VFCcount
 struct ModelData
 {
 	ModelData(
+		Context &context,
 		size_t vertices,
 		size_t normals,
 		size_t colors,
@@ -38,61 +39,9 @@ struct ModelData
 		size_t materials,
 		size_t faces,
 		size_t transforms
-		)
-        : vertices(nullptr)
-        , normals(nullptr)
-        , colors(nullptr)
-        , texcoords(nullptr)
-        , bones(nullptr)
-        //, materials(nullptr)
-        , faces(nullptr)
-        , transforms(nullptr)
-        , verticesSize(vertices)
-		, normalsSize(normals)
-		, colorsSize(colors)
-		, texcoordsSize(texcoords)
-		, bonesSize(bones)
-		, materialsSize(materials)
-		, facesSize(faces)
-		, transformsSize(transforms)
-
-	{
-		this->vertices = static_cast<glm::vec3 *>(malloc(vertices * sizeof(glm::vec3)));
-		if (normals)
-			this->normals = static_cast<glm::vec3 *>(malloc(normals * sizeof(glm::vec3)));
-		if (colors)
-			this->colors = static_cast<glm::vec4 *>(malloc(colors * sizeof(glm::vec4)));
-		if (texcoords)
-			this->texcoords = static_cast<glm::vec2 *>(malloc(texcoords * sizeof(glm::vec2)));
-
-		if (bones)
-			this->bones = static_cast<Bone *>(malloc(bones * sizeof(Bone)));
-
-		//if (materials)
-  //      {
-  //          this->materials = static_cast<std::shared_ptr<Material> *>(malloc(materials * sizeof(std::shared_ptr<Material>)));
-  //          for (unsigned int i = 0; i < materials;++i)
-  //              new(&this->materials[i]) std::shared_ptr<Material>();
-		//}
-
-		this->faces = static_cast<unsigned int *>(malloc(faces * sizeof(unsigned int)));
-		this->transforms = static_cast<glm::mat4 *>(malloc(transforms * sizeof(glm::mat4)));
-	}
-	~ModelData()
-	{
-		//Free memory
-		free(vertices);
-		free(normals);
-		free(colors);
-		free(texcoords);
-		free(bones);
-        //Call destructor on materials
-  //      for (unsigned int i = 0; i < materialsSize;++i)
-  //          this->materials[i].~shared_ptr();
-		//free(materials);
-		free(faces);
-		free(transforms);
-	}
+	);
+	~ModelData();
+	Context &m_context;
 	//Vertex attributes
 	glm::vec3 *vertices;
 	glm::vec3 *normals;
@@ -103,7 +52,9 @@ struct ModelData
 	Bone *bones;
 
 	//Materials
-    //std::shared_ptr<Material> *materials;
+    std::shared_ptr<Material> *materials;
+	vk::DescriptorPool m_descriptorPool = nullptr;
+	std::vector<vk::DescriptorSet> m_descriptorSets;
 
 	//Component attributes
 	unsigned int *faces;

@@ -57,6 +57,9 @@
     <ClCompile Include="model\ModelNode.cpp">
       <Filter>Source Files\model</Filter>
     </ClCompile>
+    <ClCompile Include="Image2D.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="vk.h">
@@ -103,6 +106,12 @@
     </ClInclude>
     <ClInclude Include="PipelineLayout.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Image2D.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="model\ShaderHeader.h">
+      <Filter>Header Files\model</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
