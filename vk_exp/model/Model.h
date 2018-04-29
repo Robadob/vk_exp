@@ -115,49 +115,6 @@ private:
 	glm::vec3 location;
 	glm::vec4 rotation;
 	Context &m_context;
-
-
-	///**
-	//* Holds information for binding the vertex positions attribute
-	//*/
-	//Shaders::VertexAttributeDetail positions;
-	///**
-	//* Holds information for binding the vertex normals attribute
-	//*/
-	//Shaders::VertexAttributeDetail normals;
-	///**
-	//* Holds information for binding the vertex colours attribute
-	//*/
-	//Shaders::VertexAttributeDetail colors;
-	///**
-	//* Holds information for binding the vertex texture coordinates attribute
-	//*/
-	//Shaders::VertexAttributeDetail texcoords;
-	//HasMatrices overrides
-public:
-	/**
-	* Sets the pointer from which the View matrix should be loaded from
-	* @param viewMat A pointer to the viewMatrix to be tracked
-	* @note This pointer is likely provided by a Camera subclass
-	*/
-	virtual void setViewMatPtr(const glm::mat4  *viewMat);
-	/**
-	* Sets the pointer from which the Projection matrix should be loaded from
-	* @param projectionMat A pointer to the projectionMatrix to be tracked
-	* @note This pointer is likely provided by the Visualisation object
-	*/
-	virtual void setProjectionMatPtr(const glm::mat4 *projectionMat);
-	/**
-	* Sets the pointer from which the Model matrix should be loaded from
-	* @param modelMat A pointer to the modelMatrix to be tracked
-	* @note This pointer is likely provided by the Visualisation object
-	*/
-	void setModelMatPtr(const glm::mat4 *modelMat);
-	/**
-	* Overrides the model matrix (and all dependent matrices) until useProgram() is next called
-	* @param modelMat Pointer to the overriding modelMat
-	*/
-	virtual void overrideModelMat(const glm::mat4 *modelMat);
 };
 
 #endif //__Model_h__

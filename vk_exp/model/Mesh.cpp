@@ -3,7 +3,7 @@
 
 void Mesh::render(vk::CommandBuffer &cb, vk::PipelineLayout &layout, glm::mat4 &transform) const
 {
-    //data->materials[materialIndex]->use(transform);
+    data->materials[materialIndex]->use(cb);
 	//Render
 	cb.pushConstants(layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &transform);
 	cb.drawIndexed(indexCount, 1, indexOffset, 0, 0);

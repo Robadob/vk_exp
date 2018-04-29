@@ -14,7 +14,7 @@ struct UniformBufferObject {
 };
 struct Vertex {
 	glm::vec3 pos;
-	glm::vec3 color;
+	glm::vec3 normal;
 	glm::vec2 texCoord;
 	static vk::VertexInputBindingDescription getBindingDesc()
 	{
@@ -35,11 +35,11 @@ struct Vertex {
 			rtn[0].format = vk::Format::eR32G32B32Sfloat;	//RGB 32bit (signed) floating point
 			rtn[0].offset = offsetof(Vertex, pos);		//Position of pos within Vertex
 		}
-		{//Colour
+		{//Normal
 			rtn[1].binding = 0;
 			rtn[1].location = 1;
 			rtn[1].format = vk::Format::eR32G32B32Sfloat;	//RGB 32bit (signed) floating point
-			rtn[1].offset = offsetof(Vertex, color);		//Position of pos within Vertex
+			rtn[1].offset = offsetof(Vertex, normal);		//Position of pos within Vertex
 		}
 		{//Tex Coord
 			rtn[2].binding = 0;
@@ -49,22 +49,6 @@ struct Vertex {
 		}
 		return rtn;
 	}
-};
-const std::vector<Vertex> tempVertices = {
-	{ { -0.5f, -0.5f, 0.0f },{ 1.0f, 0.0f, 0.0f },{ 0.0f, 0.0f } },
-	{ { 0.5f, -0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f },{ 1.0f, 0.0f } },
-	{ { 0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f },{ 1.0f, 1.0f } },
-	{ { -0.5f, 0.5f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 0.0f, 1.0f } },
-
-	{ { -0.5f, -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f },{ 0.0f, 0.0f } },
-	{ { 0.5f, -0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f },{ 1.0f, 0.0f } },
-	{ { 0.5f, 0.5f, -0.5f },{ 0.0f, 0.0f, 1.0f },{ 1.0f, 1.0f } },
-	{ { -0.5f, 0.5f, -0.5f },{ 1.0f, 1.0f, 1.0f },{ 0.0f, 1.0f } }
-};
-//Render in back to front order for transparency/blending
-static const std::vector<uint16_t> tempIndices = {
-	4, 5, 6, 6, 7, 4,
-	0, 1, 2, 2, 3, 0
 };
 /**
  * Consider using SPIRV-Cross for Shader introspection to detect layout/binding points by name

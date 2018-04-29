@@ -7,6 +7,7 @@
 #include <memory>
 #include "ShaderHeader.h"
 #include <vulkan/vulkan.hpp>
+class Context;
 class Image2D;
 class Material
 {
@@ -73,7 +74,7 @@ public:
     /**
      * Creates a named material with the default configuration
      */
-    Material(const char* name = nullptr);
+    Material(Context &m_context, const char* name = nullptr);
     /**
      *
      */
@@ -86,7 +87,7 @@ public:
     /**
      * Enables the materials settings
      */
-    void use(glm::mat4 &transform);
+    void use(vk::CommandBuffer &cb);
     static void clearActive() { Material::active = nullptr; }
     //Setters
     void setName(const std::string name) { this->name = name; };
@@ -140,5 +141,6 @@ private:
     bool faceCull;
     ShadingMode shaderMode;
     //GLenum alphaBlendMode[2]; //GL_SRC_ALPHA, GL_ONE for additive blending//GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA for default
+	Context &m_context;
 };
 #endif //__Material_h__

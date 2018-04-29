@@ -48,15 +48,12 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		m_renderingFinishedSemaphore = m_device.createSemaphore({});
 		//Create memory fences for swapchain images
 		createFences();
-		createTextureImage();
-		createTextureImageView();
-		createTextureSampler();
-		//Build a Vertex Buf with model data
-		createVertexBuffer();
-		createIndexBuffer();
+		//Create the descriptor pool (memory behind uniforms in shaders)
+		createDescriptorPool();//Relies on descriptor layouts (gfx pipeline)
+		//Create globals uniform buffer
 		createUniformBuffer();
 		updateDescriptorSet();
-
+		//Create vertex data
 		m_assimpModel = new Model(*this, "C:\\Users\\Robadob\\Downloads\\assimp-3.3.1\\test\\models-nonbsd\\md5\\Bob.md5mesh", 1.0f);
 
 		SDL_ShowWindow(m_window);
@@ -78,12 +75,9 @@ void Context::destroy()
 	if(m_window)
 		SDL_HideWindow(m_window);
 	m_presentQueue.waitIdle();
-	destroyVertexBuffer();
-	destroyIndexBuffer();
+	delete m_assimpModel;
 	destroyUniformBuffer();
-	destroyTextureSampler();
-	destroyTextureImageView();
-	destroyTextureImage();
+	destroyDescriptorPool();
 	destroyFences();
 	if (m_renderingFinishedSemaphore)
 	{
@@ -129,8 +123,6 @@ void Context::createSwapchainStuff()
 	createSwapchainImages();
 	//Create GFX pipeline? (framebuffer/commandpool dependent on this for renderpass)
 	createGraphicsPipeline();
-	//Create the descriptor pool (memory behind uniforms in shaders)
-	createDescriptorPool();//Relies on descriptor layouts (gfx pipeline)
 	//Create the command pool
 	createCommandPool(m_graphicsQueueId);
 	//Create the depth buffer stuff
@@ -145,7 +137,6 @@ void Context::destroySwapchainStuff()
 	destroyCommandPool();
 	destroyFramebuffers();
 	destroyDepthResources();
-	destroyDescriptorPool();
 	delete m_gfxPipeline;
 	m_gfxPipeline = nullptr;
 	destroySwapChainImages();
@@ -384,18 +375,16 @@ vk::PresentModeKHR Context::selectPresentMode()
 void Context::createDescriptorPool()
 {
 	/*Desc Pool*/
-	std::array<vk::DescriptorPoolSize, 2> poolSizes;
+	std::array<vk::DescriptorPoolSize, 1> poolSizes;
 	{
 		poolSizes[0].type = vk::DescriptorType::eUniformBuffer;
 		poolSizes[0].descriptorCount = 1;
-		poolSizes[1].type = vk::DescriptorType::eCombinedImageSampler;
-		poolSizes[1].descriptorCount = 1;
 	}
 	vk::DescriptorPoolCreateInfo poolCreateInfo;
 	{
 		poolCreateInfo.poolSizeCount = (unsigned int)poolSizes.size();
 		poolCreateInfo.pPoolSizes = poolSizes.data();
-		poolCreateInfo.maxSets = 2;
+		poolCreateInfo.maxSets = 1;
 		poolCreateInfo.flags = {};
 	}
 	m_descriptorPool = m_device.createDescriptorPool(poolCreateInfo);
@@ -403,10 +392,10 @@ void Context::createDescriptorPool()
 	vk::DescriptorSetAllocateInfo descSetAllocInfo;
 	{
 		descSetAllocInfo.descriptorPool = m_descriptorPool;
-		descSetAllocInfo.descriptorSetCount = m_gfxPipeline->Layout().descriptorSetLayoutsSize();
-		descSetAllocInfo.pSetLayouts = m_gfxPipeline->Layout().descriptorSetLayouts().data();
+		descSetAllocInfo.descriptorSetCount = 1;
+		descSetAllocInfo.pSetLayouts = m_gfxPipeline->Layout().globalsUniformBufferSetLayout();
 	}
-	m_descriptorSets = m_device.allocateDescriptorSets(descSetAllocInfo);
+	m_globalDescriptorSet = m_device.allocateDescriptorSets(descSetAllocInfo)[0];
 }
 void Context::createSwapchain()
 {
@@ -608,7 +597,7 @@ void Context::fillCommandBuffers()
 			rpBegin.pClearValues = clearValues.data();
 		}
 		m_commandBuffers[i].beginRenderPass(rpBegin, vk::SubpassContents::eInline);
-		m_commandBuffers[i].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Layout().get(), 0, { m_descriptorSets }, {});
+		m_commandBuffers[i].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Layout().get(), 0, { m_globalDescriptorSet }, {});
 		//m_commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Pipeline());
 		//VkDeviceSize offsets[] = { 0 };
 		//m_commandBuffers[i].bindVertexBuffers(0, 1, &m_vertexBuffer, offsets);
@@ -619,158 +608,6 @@ void Context::fillCommandBuffers()
 		m_commandBuffers[i].endRenderPass();
 		m_commandBuffers[i].end();
 	}
-}
-void Context::createTextureImage()
-{
-	int texWidth, texHeight, texChannels;
-	stbi_uc* pixels = stbi_load("../shaders/test.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-	VkDeviceSize imageSize = texWidth * texHeight * 4;
-
-	if (!pixels) {
-		throw std::runtime_error("failed to load texture image!");
-	}
-
-	vk::Buffer stagingBuffer;
-	vk::DeviceMemory stagingBufferMemory;
-	createBuffer(
-		imageSize,
-		vk::BufferUsageFlagBits::eTransferSrc,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-		stagingBuffer,
-		stagingBufferMemory
-	); 
-	void* data;
-	m_device.mapMemory(stagingBufferMemory, 0, imageSize, {}, &data);
-	memcpy(data, pixels, imageSize);
-	m_device.unmapMemory(stagingBufferMemory); 
-	stbi_image_free(pixels);
-	createImage(
-		(uint32_t)texWidth,
-		(uint32_t)texHeight,
-		vk::Format::eR8G8B8A8Unorm,
-		vk::ImageTiling::eOptimal,
-		vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		m_textureImage,
-		m_textureImageMemory
-	);
-	transitionImageLayout(
-		m_textureImage,
-		vk::Format::eR8G8B8A8Unorm,
-		vk::ImageLayout::eUndefined,
-		vk::ImageLayout::eTransferDstOptimal
-	);
-	copyBufferToImage(
-		stagingBuffer,
-		m_textureImage,
-		(uint32_t)texWidth,
-		(uint32_t)texHeight
-	);
-	transitionImageLayout(
-		m_textureImage,
-		vk::Format::eR8G8B8A8Unorm,
-		vk::ImageLayout::eTransferDstOptimal,
-		vk::ImageLayout::eShaderReadOnlyOptimal
-	);
-	m_device.destroyBuffer(stagingBuffer);
-	m_device.freeMemory(stagingBufferMemory);
-}
-void Context::createTextureImageView()
-{
-	m_textureImageView = createImageView(m_textureImage, vk::Format::eR8G8B8A8Unorm, vk::ImageAspectFlagBits::eColor);
-}
-void Context::createTextureSampler()
-{
-	vk::SamplerCreateInfo samplerInfo;
-	{
-		samplerInfo.magFilter = vk::Filter::eLinear;
-		samplerInfo.minFilter = vk::Filter::eLinear;
-		samplerInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
-		samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
-		samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
-		samplerInfo.anisotropyEnable = m_physicalDeviceFeatures.samplerAnisotropy;
-		samplerInfo.maxAnisotropy = 16;
-		samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
-		samplerInfo.unnormalizedCoordinates = false;
-		samplerInfo.compareEnable = false;
-		samplerInfo.compareOp = vk::CompareOp::eAlways;
-		samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
-		samplerInfo.mipLodBias = 0.0f;
-		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = 0.0f;
-	}
-	m_textureSampler = m_device.createSampler(samplerInfo);
-}
-void Context::createVertexBuffer()
-{
-	size_t buffSize = sizeof(tempVertices[0])*tempVertices.size();
-	//Transfer queue data transfer
-	vk::Buffer stagingBuffer;
-	vk::DeviceMemory stagingBufferMemory;
-	createBuffer(
-		buffSize,
-		vk::BufferUsageFlagBits::eTransferSrc,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-		stagingBuffer,
-		stagingBufferMemory
-	);
-	void* data;
-	m_device.mapMemory(stagingBufferMemory, 0, buffSize, {}, &data);
-	memcpy(data, tempVertices.data(), buffSize);
-	m_device.unmapMemory(stagingBufferMemory);
-	createBuffer(
-		buffSize,
-		vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		m_vertexBuffer,
-		m_vertexBufferMemory
-	);
-	copyBuffer(stagingBuffer, m_vertexBuffer, buffSize);
-	m_device.destroyBuffer(stagingBuffer);
-	m_device.freeMemory(stagingBufferMemory);
-	//Mapped buffer data transfer
-	/*
-	createBuffer(
-		buffSize,
-		vk::BufferUsageFlagBits::eVertexBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-		m_vertexBuffer,
-		m_vertexBufferMemory
-	);
-	//Map Device Buffer to Host
-	void* data;
-	m_device.mapMemory(m_vertexBufferMemory, 0, buffSize, {}, &data);
-		memcpy(data, tempVertices.data(), buffSize);
-	m_device.unmapMemory(m_vertexBufferMemory);
-    */
-}
-void Context::createIndexBuffer()
-{
-	size_t buffSize = sizeof(tempIndices[0])*tempIndices.size();
-	//Transfer queue data transfer
-	vk::Buffer stagingBuffer;
-	vk::DeviceMemory stagingBufferMemory;
-	createBuffer(
-		buffSize,
-		vk::BufferUsageFlagBits::eTransferSrc,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-		stagingBuffer,
-		stagingBufferMemory
-	);
-	void* data;
-	m_device.mapMemory(stagingBufferMemory, 0, buffSize, {}, &data);
-	memcpy(data, tempIndices.data(), buffSize);
-	m_device.unmapMemory(stagingBufferMemory);
-	createBuffer(
-		buffSize,
-		vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		m_indexBuffer,
-		m_indexBufferMemory
-	);
-	copyBuffer(stagingBuffer, m_indexBuffer, buffSize);
-	m_device.destroyBuffer(stagingBuffer);
-	m_device.freeMemory(stagingBufferMemory);
 }
 void Context::createUniformBuffer()
 {
@@ -792,15 +629,9 @@ void Context::updateDescriptorSet()
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(UniformBufferObject);
 	}
-	vk::DescriptorImageInfo imageInfo;
+	std::array<vk::WriteDescriptorSet, 1> descWrites;
 	{
-		imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-		imageInfo.imageView = m_textureImageView;
-		imageInfo.sampler = m_textureSampler;
-	}
-	std::array<vk::WriteDescriptorSet, 2> descWrites;
-	{
-		descWrites[0].dstSet = m_descriptorSets[0];
+		descWrites[0].dstSet = m_globalDescriptorSet;
 		descWrites[0].dstBinding = 0;
 		descWrites[0].dstArrayElement = 0;
 		descWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
@@ -809,58 +640,17 @@ void Context::updateDescriptorSet()
 		descWrites[0].pImageInfo = nullptr;
 		descWrites[0].pTexelBufferView = nullptr;
 	}
-	{
-		descWrites[1].dstSet = m_descriptorSets[1];
-		descWrites[1].dstBinding = 0;
-		descWrites[1].dstArrayElement = 0;
-		descWrites[1].descriptorType = vk::DescriptorType::eCombinedImageSampler;
-		descWrites[1].descriptorCount = 1;
-		descWrites[1].pImageInfo = &imageInfo;
-		descWrites[1].pBufferInfo = nullptr;
-		descWrites[1].pTexelBufferView = nullptr;
-	}
 	m_device.updateDescriptorSets((unsigned int)descWrites.size(), descWrites.data(), 0, nullptr);
 }
 /**
  * Destruction utility fns
  */
-void Context::destroyVertexBuffer()
-{
-	m_device.destroyBuffer(m_vertexBuffer);
-	m_vertexBuffer = nullptr;
-	m_device.freeMemory(m_vertexBufferMemory);
-	m_vertexBufferMemory = nullptr;
-}
-void Context::destroyIndexBuffer()
-{
-	m_device.destroyBuffer(m_indexBuffer);
-	m_indexBuffer = nullptr;
-	m_device.freeMemory(m_indexBufferMemory);
-	m_indexBufferMemory = nullptr;
-}
 void Context::destroyUniformBuffer()
 {
 	m_device.destroyBuffer(m_uniformBuffer);
 	m_uniformBuffer = nullptr;
 	m_device.freeMemory(m_uniformBufferMemory);
 	m_uniformBufferMemory = nullptr;
-}
-void Context::destroyTextureSampler()
-{
-	m_device.destroySampler(m_textureSampler);
-	m_textureSampler = nullptr;
-}
-void Context::destroyTextureImageView()
-{
-	m_device.destroyImageView(m_textureImageView);
-	m_textureImageView = nullptr;
-}
-void Context::destroyTextureImage()
-{
-	m_device.destroyImage(m_textureImage);
-	m_textureImage = nullptr;
-	m_device.freeMemory(m_textureImageMemory);
-	m_textureImageMemory = nullptr;
 }
 void Context::destroyFences()
 {
@@ -942,7 +732,7 @@ void Context::destroyDescriptorPool()
 {
 	m_device.destroyDescriptorPool(m_descriptorPool);
 	m_descriptorPool = nullptr;
-	m_descriptorSets.clear();
+	m_globalDescriptorSet = nullptr;
 }
 void Context::destroyLogicalDevice()
 {

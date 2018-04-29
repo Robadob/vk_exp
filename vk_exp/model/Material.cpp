@@ -1,7 +1,10 @@
 #include "Material.h"
 #include "../Image2D.h"
-Material::Material(const char* name)
-    : name(name==nullptr?"":name)
+#include "../Context.h"
+#include "../GraphicsPipeline.h"
+Material::Material(Context &context, const char* name)
+    : m_context(context)
+	, name(name==nullptr?"":name)
     , properties()
     , isWireframe(false)
     , faceCull(true)
@@ -53,11 +56,33 @@ void Material::addTexture(std::shared_ptr<Image2D> texPtr, TextureType type)
 	t.texture = texPtr;
 	textures[type].push_back(t);
 	assert(type == Diffuse);
+
+	vk::DescriptorImageInfo imageInfo;
+	{
+		imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+		imageInfo.imageView = texPtr->ImageView();
+		imageInfo.sampler = texPtr->Sampler();
+	}
+	std::array<vk::WriteDescriptorSet, 1> descWrites;
+	{
+		descWrites[0].dstSet = m_descriptorSet;
+		descWrites[0].dstBinding = 0;
+		descWrites[0].dstArrayElement = 0;
+		descWrites[0].descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		descWrites[0].descriptorCount = 1;
+		descWrites[0].pImageInfo = &imageInfo;
+		descWrites[0].pBufferInfo = nullptr;
+		descWrites[0].pTexelBufferView = nullptr;
+	}
+	m_context.Device().updateDescriptorSets((unsigned int)descWrites.size(), descWrites.data(), 0, nullptr);
 }
 
-void Material::use(glm::mat4 &transform)
+void Material::use(vk::CommandBuffer &cb)
 {
+	//In future choose pipeline (or specialisation) here
 
+	//Set Texture
+	cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_context.Pipeline().Layout().get(), 1, { m_descriptorSet }, {});
 }
 
 void Material::setDescriptorSet(vk::DescriptorSet descSet)

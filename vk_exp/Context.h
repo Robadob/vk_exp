@@ -51,18 +51,10 @@ class Context
 	std::vector<vk::Framebuffer> m_scFramebuffers;
 	std::vector<vk::CommandBuffer> m_commandBuffers;
 	std::vector<vk::Fence> m_fences;
-	vk::Image m_textureImage;
-	vk::DeviceMemory m_textureImageMemory;
-	vk::ImageView m_textureImageView;
-	vk::Sampler m_textureSampler;
-	vk::Buffer m_vertexBuffer = nullptr;
-	vk::DeviceMemory m_vertexBufferMemory = nullptr;
-	vk::Buffer m_indexBuffer = nullptr;
-	vk::DeviceMemory m_indexBufferMemory = nullptr;
 	vk::Buffer m_uniformBuffer = nullptr;
 	vk::DeviceMemory m_uniformBufferMemory = nullptr;
 	vk::DescriptorPool m_descriptorPool = nullptr;
-	std::vector<vk::DescriptorSet> m_descriptorSets;
+	vk::DescriptorSet m_globalDescriptorSet = nullptr;
 	vk::Image m_depthImage = nullptr;
 	vk::DeviceMemory m_depthImageMemory = nullptr;
 	vk::ImageView m_depthImageView = nullptr;
@@ -83,6 +75,7 @@ public:
 	const vk::Extent2D &SurfaceDims() const { return m_swapchainDims; }
 	const vk::SurfaceFormatKHR &SurfaceFormat() const { return m_surfaceFormat; }
 	const vk::PipelineCache &PipelineCache() const { return m_pipelineCache; }
+	const vk::PhysicalDeviceFeatures &PhysicalDeviceFeatures() const { return m_physicalDeviceFeatures; }
 	GraphicsPipeline &Pipeline() { return *m_gfxPipeline;  }
 	/**
 	 * Could switch to the active rebuild swapChainCreateInfo.oldSwapchain = m_swapChain; method
@@ -130,23 +123,10 @@ private:
 	void createCommandBuffers();
 	void createFences();
 	void fillCommandBuffers();
-	void createTextureImage();
-	void createTextureImageView();
-	void createTextureSampler();
-	/**
-	 * Could use a seperate transfer queue
-	 */
-	void createVertexBuffer();
-	void createIndexBuffer();
 	void createUniformBuffer();
 	void updateDescriptorSet();//This binds resources to the descriptor set
 	//Destroy
-	void destroyVertexBuffer();
-	void destroyIndexBuffer();
 	void destroyUniformBuffer();
-	void destroyTextureSampler();
-	void destroyTextureImageView();
-	void destroyTextureImage();
 	void destroyFences();
 	void destroyCommandPool();
 	void destroyFramebuffers();
@@ -174,6 +154,9 @@ private:
 	void copyBufferToImage(const vk::Buffer &buffer, vk::Image &image, const uint32_t &width, const uint32_t &height) const;
 	vk::ImageView createImageView(const vk::Image &image, const vk::Format &format, const vk::ImageAspectFlags aspectFlags) const;
 	public:
+	/**
+	* Could use a seperate transfer queue
+	*/
 	vk::CommandBuffer beginSingleTimeCommands() const;
 	void endSingleTimeCommands(vk::CommandBuffer &cb) const;
 	unsigned int findMemoryType(const unsigned int &typeFilter, const vk::MemoryPropertyFlags& properties) const;

@@ -39,6 +39,7 @@ ModelData::ModelData(
 	, transformsSize(transforms)
 
 {
+	assert(vertices && normals && texcoords && !colors);//Currently using fixed pipeline so only this vertex layout supported.
 	this->vertices = static_cast<glm::vec3 *>(malloc(vertices * sizeof(glm::vec3)));
 	if (normals)
 		this->normals = static_cast<glm::vec3 *>(malloc(normals * sizeof(glm::vec3)));
@@ -56,20 +57,20 @@ ModelData::ModelData(
 		for (unsigned int i = 0; i < materials; ++i)
 		{
 			new(&this->materials[i]) std::shared_ptr<Material>();
-			this->materials[i] = std::make_shared<Material>();
+			this->materials[i] = std::make_shared<Material>(m_context);
 		}
 
 		{//Allocate pools to create one for each material
 			std::array<vk::DescriptorPoolSize, 1> poolSizes;
 			{
 				poolSizes[0].type = vk::DescriptorType::eCombinedImageSampler;
-				poolSizes[0].descriptorCount = materials;
+				poolSizes[0].descriptorCount = (unsigned int)materials;
 			}
 			vk::DescriptorPoolCreateInfo poolCreateInfo;
 			{
 				poolCreateInfo.poolSizeCount = (unsigned int)poolSizes.size();
 				poolCreateInfo.pPoolSizes = poolSizes.data();
-				poolCreateInfo.maxSets = materials;//1 per diffuse texture
+				poolCreateInfo.maxSets = (unsigned int)materials;//1 per diffuse texture
 				poolCreateInfo.flags = {};
 			}
 			m_descriptorPool = m_context.Device().createDescriptorPool(poolCreateInfo);
@@ -79,7 +80,7 @@ ModelData::ModelData(
 			vk::DescriptorSetAllocateInfo descSetAllocInfo;
 			{
 				descSetAllocInfo.descriptorPool = m_descriptorPool;
-				descSetAllocInfo.descriptorSetCount = descSets.size();
+				descSetAllocInfo.descriptorSetCount = (unsigned int)descSets.size();
 				descSetAllocInfo.pSetLayouts = descSets.data();
 			}
 			//Create set per material and attach
@@ -517,35 +518,6 @@ void Model::render(vk::CommandBuffer &cb, GraphicsPipeline &pipeline)
 	//for (unsigned int i = 0; i < data->materialsSize; ++i)
  //       if (auto s = data->materials[i]->getShaders())
  //           s->clearProgram();
-}
-//HasMatrices overrides
-void Model::setViewMatPtr(const glm::mat4 *viewMat)
-{
-	/*if (data)
-		for (unsigned int i = 0; i < data->materialsSize; ++i)
-		if (auto s = data->materials[i]->getShaders())
-			s->setViewMatPtr(viewMat);*/
-}
-void Model::setProjectionMatPtr(const glm::mat4 *projectionMat)
-{
-	//if (data)
-	//	for (unsigned int i = 0; i < data->materialsSize; ++i)
-	//	if (auto s = data->materials[i]->getShaders())
-	//		s->setProjectionMatPtr(projectionMat);
-}
-void Model::setModelMatPtr(const glm::mat4 *modelMat)
-{
-	/*if (data)
-		for (unsigned int i = 0; i < data->materialsSize; ++i)
-		if (auto s = data->materials[i]->getShaders())
-			s->setProjectionMatPtr(modelMat);*/
-}
-void Model::overrideModelMat(const glm::mat4 *modelMat)
-{
-	//if (data)
-	//	for (unsigned int i = 0; i < data->materialsSize; ++i)
-	//	if (auto s = data->materials[i]->getShaders())
-	//		s->setProjectionMatPtr(modelMat);
 }
 vk::VertexInputBindingDescription Model::BindingDesc() const
 {

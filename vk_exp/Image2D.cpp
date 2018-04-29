@@ -39,6 +39,39 @@ Image2D::Image2D(Context &context, const char* imagePath, const char *modelFolde
 	transitionImageLayout(vk::ImageLayout::eTransferDstOptimal);
 	copyTo(staging);
 	transitionImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+	vk::ImageViewCreateInfo viewInfo;
+	{
+		viewInfo.image = m_image;
+		viewInfo.viewType = vk::ImageViewType::e2D;
+		viewInfo.format = m_format;
+		viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+		viewInfo.subresourceRange.baseMipLevel = 0;
+		viewInfo.subresourceRange.levelCount = 1;
+		viewInfo.subresourceRange.baseArrayLayer = 0;
+		viewInfo.subresourceRange.layerCount = 1;
+		viewInfo.components = vk::ComponentMapping();//eIdentity
+	}
+	m_imageView = m_context.Device().createImageView(viewInfo);
+
+	vk::SamplerCreateInfo samplerInfo;
+	{
+		samplerInfo.magFilter = vk::Filter::eLinear;
+		samplerInfo.minFilter = vk::Filter::eLinear;
+		samplerInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
+		samplerInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
+		samplerInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
+		samplerInfo.anisotropyEnable = m_context.PhysicalDeviceFeatures().samplerAnisotropy;
+		samplerInfo.maxAnisotropy = 16;
+		samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
+		samplerInfo.unnormalizedCoordinates = false;
+		samplerInfo.compareEnable = false;
+		samplerInfo.compareOp = vk::CompareOp::eAlways;
+		samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+		samplerInfo.mipLodBias = 0.0f;
+		samplerInfo.minLod = 0.0f;
+		samplerInfo.maxLod = 0.0f;
+	}
+	m_sampler = m_context.Device().createSampler(samplerInfo);
 }
 Image2D::~Image2D()
 {
