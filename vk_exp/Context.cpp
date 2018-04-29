@@ -9,6 +9,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
+#include "model/Model.h"
 
 /**
  * Public fns
@@ -41,7 +42,6 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		m_presentQueue = m_device.getQueue(m_presentQueueId, 0);
 		//Create/Load pipeline cache
 		setupPipelineCache();
-		createDescriptorPool();
 		//Create Swapchain and dependencies
 		createSwapchainStuff();
 		//Create semaphores for queue sync
@@ -57,6 +57,9 @@ void Context::init(unsigned int width, unsigned int height, const char * title)
 		createIndexBuffer();
 		createUniformBuffer();
 		updateDescriptorSet();
+
+		m_assimpModel = new Model(*this, "C:\\Users\\Robadob\\Downloads\\assimp-3.3.1\\test\\models-nonbsd\\md5\\Bob.md5mesh", 1.0f);
+
 		SDL_ShowWindow(m_window);
 		isInit.store(true);
 		/**
@@ -96,7 +99,6 @@ void Context::destroy()
 	backupPipelineCache();
 	destroyPipelineCache();
 	destroySwapchainStuff();
-	destroyDescriptorPool();
 	destroyLogicalDevice();
 	destroySurface();
 #ifdef _DEBUG
@@ -128,6 +130,8 @@ void Context::createSwapchainStuff()
 	createSwapchainImages();
 	//Create GFX pipeline? (framebuffer/commandpool dependent on this for renderpass)
 	createGraphicsPipeline();
+	//Create the descriptor pool (memory behind uniforms in shaders)
+	createDescriptorPool();//Relies on descriptor layouts (gfx pipeline)
 	//Create the command pool
 	createCommandPool(m_graphicsQueueId);
 	//Create the depth buffer stuff
@@ -142,6 +146,7 @@ void Context::destroySwapchainStuff()
 	destroyCommandPool();
 	destroyFramebuffers();
 	destroyDepthResources();
+	destroyDescriptorPool();
 	delete m_gfxPipeline;
 	m_gfxPipeline = nullptr;
 	destroySwapChainImages();
@@ -379,31 +384,6 @@ vk::PresentModeKHR Context::selectPresentMode()
 }
 void Context::createDescriptorPool()
 {
-	/*Uniform Buffer Descriptor Set Layout*/
-	vk::DescriptorSetLayoutBinding uniformBufferLayoutBinding;
-	{
-		uniformBufferLayoutBinding.binding = 0;
-		uniformBufferLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-		uniformBufferLayoutBinding.descriptorCount = 1;
-		uniformBufferLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
-		uniformBufferLayoutBinding.pImmutableSamplers = nullptr;
-	}
-	/*Texture Sampler Descriptor Set Layout*/
-	vk::DescriptorSetLayoutBinding textureSamplerLayoutBinding;
-	{
-		textureSamplerLayoutBinding.binding = 1;
-		textureSamplerLayoutBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-		textureSamplerLayoutBinding.descriptorCount = 1;
-		textureSamplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
-		textureSamplerLayoutBinding.pImmutableSamplers = nullptr;
-	} 
-	std::array<vk::DescriptorSetLayoutBinding, 2> bindings = { uniformBufferLayoutBinding, textureSamplerLayoutBinding };
-	vk::DescriptorSetLayoutCreateInfo descSetCreateInfo;
-	{
-		descSetCreateInfo.bindingCount = (unsigned int)bindings.size();
-		descSetCreateInfo.pBindings = bindings.data();
-	}
-	m_descriptorSetLayout = m_device.createDescriptorSetLayout(descSetCreateInfo);
 	/*Desc Pool*/
 	std::array<vk::DescriptorPoolSize, 2> poolSizes;
 	{
@@ -420,12 +400,12 @@ void Context::createDescriptorPool()
 		poolCreateInfo.flags = {};
 	}
 	m_descriptorPool = m_device.createDescriptorPool(poolCreateInfo);
-	vk::DescriptorSetLayout layouts[] = { m_descriptorSetLayout };
+	assert(m_gfxPipeline->Layout().descriptorSetLayoutsSize() == 1);
 	vk::DescriptorSetAllocateInfo descSetAllocInfo;
 	{
 		descSetAllocInfo.descriptorPool = m_descriptorPool;
-		descSetAllocInfo.descriptorSetCount = 1;
-		descSetAllocInfo.pSetLayouts = layouts;
+		descSetAllocInfo.descriptorSetCount = m_gfxPipeline->Layout().descriptorSetLayoutsSize();
+		descSetAllocInfo.pSetLayouts = m_gfxPipeline->Layout().descriptorSetLayouts();
 	}
 	m_descriptorSet = m_device.allocateDescriptorSets(descSetAllocInfo)[0];
 }
@@ -629,13 +609,14 @@ void Context::fillCommandBuffers()
 			rpBegin.pClearValues = clearValues.data();
 		}
 		m_commandBuffers[i].beginRenderPass(rpBegin, vk::SubpassContents::eInline);
-		m_commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Pipeline());
-		m_commandBuffers[i].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->PipelineLayout(), 0, { m_descriptorSet }, {});
-		VkDeviceSize offsets[] = { 0 };
-		m_commandBuffers[i].bindVertexBuffers(0, 1, &m_vertexBuffer, offsets);
-		m_commandBuffers[i].bindIndexBuffer(m_indexBuffer, 0, vk::IndexType::eUint16);
-		//m_commandBuffers[i].draw((unsigned int)tempVertices.size(), 1, 0, 0);//Drawing triangles without index
-		m_commandBuffers[i].drawIndexed((unsigned int)tempIndices.size(), 1, 0, 0, 0);
+		m_commandBuffers[i].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Layout().get(), 0, { m_descriptorSet }, {});
+		//m_commandBuffers[i].bindPipeline(vk::PipelineBindPoint::eGraphics, m_gfxPipeline->Pipeline());
+		//VkDeviceSize offsets[] = { 0 };
+		//m_commandBuffers[i].bindVertexBuffers(0, 1, &m_vertexBuffer, offsets);
+		//m_commandBuffers[i].bindIndexBuffer(m_indexBuffer, 0, vk::IndexType::eUint16);
+		////m_commandBuffers[i].draw((unsigned int)tempVertices.size(), 1, 0, 0);//Drawing triangles without index
+		//m_commandBuffers[i].drawIndexed((unsigned int)tempIndices.size(), 1, 0, 0, 0);
+		m_assimpModel->render(m_commandBuffers[i], *m_gfxPipeline);
 		m_commandBuffers[i].endRenderPass();
 		m_commandBuffers[i].end();
 	}
@@ -960,8 +941,6 @@ void Context::destroySwapChain()
 }
 void Context::destroyDescriptorPool()
 {
-	m_device.destroyDescriptorSetLayout(m_descriptorSetLayout);
-	m_descriptorSetLayout = nullptr;
 	m_device.destroyDescriptorPool(m_descriptorPool);
 	m_descriptorPool = nullptr;
 	m_descriptorSet = nullptr;
@@ -1093,7 +1072,7 @@ void Context::updateUniformBuffer()
 
 	//Spin around z axis
 	UniformBufferObject ubo = {};
-	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.model = glm::mat4(1);// glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	ubo.view = e_viewMat ? *e_viewMat : glm::mat4();
 	ubo.proj = glm::perspective(glm::radians(45.0f), m_swapchainDims.width / (float)m_swapchainDims.height, 0.1f, 10.0f);
 	ubo.proj[1][1] *= -1;

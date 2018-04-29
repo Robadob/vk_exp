@@ -6,8 +6,8 @@
 
 GraphicsPipeline::GraphicsPipeline(Context &ctx, const char * vertPath, const char * fragPath)
 	: m_context(ctx)
+	, m_pipelineLayout(ctx)
 {
-	m_pipelineLayout = pipelineLayout();
 	m_renderPass = renderPass();
 
 	auto v = readFile(vertPath);
@@ -39,7 +39,7 @@ GraphicsPipeline::GraphicsPipeline(Context &ctx, const char * vertPath, const ch
 		pipelineInfo.pDepthStencilState = &dss;
 		pipelineInfo.pColorBlendState = &cbs;
 		pipelineInfo.pDynamicState = nullptr;
-		pipelineInfo.layout = m_pipelineLayout;
+		pipelineInfo.layout = m_pipelineLayout.get();
 		pipelineInfo.renderPass = m_renderPass;
 		pipelineInfo.subpass = 0;
 		pipelineInfo.basePipelineHandle = nullptr;
@@ -53,8 +53,6 @@ GraphicsPipeline::~GraphicsPipeline()
 {
 	m_context.Device().destroyPipeline(m_pipeline);
 	m_pipeline = nullptr;
-	m_context.Device().destroyPipelineLayout(m_pipelineLayout);
-	m_pipelineLayout = nullptr;
 	m_context.Device().destroyRenderPass(m_renderPass);
 	m_renderPass = nullptr;
 }
@@ -237,13 +235,19 @@ vk::PipelineColorBlendStateCreateInfo GraphicsPipeline::colorBlendState()
 
 vk::PipelineLayout GraphicsPipeline::pipelineLayout()
 {
+	vk::PushConstantRange pushConstantRange;
+	{
+		pushConstantRange.offset=0;//Must be multiple of 4
+		pushConstantRange.size=sizeof(glm::mat4);//Must be multiple of 4, VkPhysicalDeviceLimits::maxPushConstantsSize minus offset
+		pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
+	}
 	vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
 	{
 		pipelineLayoutInfo.flags = {};
-		pipelineLayoutInfo.setLayoutCount = 1;
-		pipelineLayoutInfo.pSetLayouts = &m_context.DescriptorSetLayout();
-		pipelineLayoutInfo.pushConstantRangeCount = 0;
-		pipelineLayoutInfo.pPushConstantRanges = nullptr;
+		pipelineLayoutInfo.setLayoutCount = m_pipelineLayout.descriptorSetLayoutsSize();
+		pipelineLayoutInfo.pSetLayouts = m_pipelineLayout.descriptorSetLayouts();//Uniform bindings
+		pipelineLayoutInfo.pushConstantRangeCount = 1;
+		pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 	}
 	return m_context.Device().createPipelineLayout(pipelineLayoutInfo);
 }

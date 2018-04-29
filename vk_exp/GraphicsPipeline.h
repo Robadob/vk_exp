@@ -2,6 +2,7 @@
 #define __GraphicsPipeline_h__
 #include <vector>
 #include <vulkan/vulkan.hpp>
+#include "PipelineLayout.h"
 class Context;
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE //Vulkan prefers depth range 0 - 1, GL uses -1 - 1
@@ -77,7 +78,7 @@ public:
 	~GraphicsPipeline();
 	const vk::RenderPass& RenderPass() const { return m_renderPass;  }
 	const vk::Pipeline& Pipeline() const { return m_pipeline; }
-	const vk::PipelineLayout& PipelineLayout() const { return m_pipelineLayout; }
+	PipelineLayout& Layout() { return m_pipelineLayout; }
 private:
 	static std::vector<char> readFile(const char * file);
 	vk::ShaderModule createShader(const std::vector<char>& code) const;
@@ -95,7 +96,7 @@ private:
 	vk::RenderPass renderPass() const;
 
 	vk::Pipeline m_pipeline = nullptr;
-	vk::PipelineLayout m_pipelineLayout = nullptr;
+	PipelineLayout m_pipelineLayout;
 	vk::RenderPass m_renderPass = nullptr;
 
 	//Temp structs that need pointers passed to CreateInfo's

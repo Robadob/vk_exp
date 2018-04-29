@@ -5,6 +5,7 @@
 #include <vulkan/vulkan.hpp>
 #include <atomic>
 #include <glm/glm.hpp>
+class Model;
 class GraphicsPipeline;
 #ifdef _DEBUG
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugLayerCallback(
@@ -62,7 +63,6 @@ class Context
 	vk::DeviceMemory m_uniformBufferMemory = nullptr;
 	vk::DescriptorPool m_descriptorPool = nullptr;
 	vk::DescriptorSet m_descriptorSet = nullptr;
-	vk::DescriptorSetLayout m_descriptorSetLayout = nullptr;
 	vk::Image m_depthImage = nullptr;
 	vk::DeviceMemory m_depthImageMemory = nullptr;
 	vk::ImageView m_depthImageView = nullptr;
@@ -71,6 +71,7 @@ class Context
 #ifdef _DEBUG
 	vk::DebugReportCallbackEXT m_debugCallback = nullptr;
 #endif
+	Model *m_assimpModel;
 	//External data (read only access)
 	const glm::mat4 *e_viewMat = nullptr;
 public:
@@ -82,7 +83,6 @@ public:
 	const vk::Extent2D &SurfaceDims() const { return m_swapchainDims; }
 	const vk::SurfaceFormatKHR &SurfaceFormat() const { return m_surfaceFormat; }
 	const vk::PipelineCache &PipelineCache() const { return m_pipelineCache; }
-	const vk::DescriptorSetLayout &DescriptorSetLayout() const { return m_descriptorSetLayout; }
 	/**
 	 * Could switch to the active rebuild swapChainCreateInfo.oldSwapchain = m_swapChain; method
 	 */
@@ -163,18 +163,19 @@ private:
 	std::string pipelineCacheFilepath();
 	void createSwapchainStuff();
 	void destroySwapchainStuff();
-	unsigned int findMemoryType(const unsigned int &typeFilter, const vk::MemoryPropertyFlags& properties) const;
 	vk::Format findSupportedFormat(const std::vector<vk::Format>& candidates, const vk::ImageTiling &tiling, vk::FormatFeatureFlags features);
 	static bool hasStencilComponent(const vk::Format &format);
 	void createBuffer(const vk::DeviceSize &size, const vk::BufferUsageFlags &usage, const vk::MemoryPropertyFlags &properties, vk::Buffer& buffer, vk::DeviceMemory& bufferMemory) const;
 	void copyBuffer(const vk::Buffer &src, const vk::Buffer &dest, const vk::DeviceSize &size, const vk::DeviceSize &srcOffset = 0, const vk::DeviceSize &dstOffset = 0) const;
 	void createImage(const uint32_t &width, const uint32_t &height, const vk::Format &format, const vk::ImageTiling &tiling, const vk::ImageUsageFlags &usage, const vk::MemoryPropertyFlags &properties, vk::Image& image, vk::DeviceMemory& imageMemory) const;
-	vk::CommandBuffer beginSingleTimeCommands() const;
-	void endSingleTimeCommands(vk::CommandBuffer &cb) const;
+	
 	void transitionImageLayout(vk::Image &image, const vk::Format &format, const vk::ImageLayout &oldLayout, const vk::ImageLayout &newLayout) const;
 	void copyBufferToImage(const vk::Buffer &buffer, vk::Image &image, const uint32_t &width, const uint32_t &height) const;
 	vk::ImageView createImageView(const vk::Image &image, const vk::Format &format, const vk::ImageAspectFlags aspectFlags) const;
 	public:
+	vk::CommandBuffer beginSingleTimeCommands() const;
+	void endSingleTimeCommands(vk::CommandBuffer &cb) const;
+	unsigned int findMemoryType(const unsigned int &typeFilter, const vk::MemoryPropertyFlags& properties) const;
 	vk::Format findDepthFormat();
 	void toggleFullScreen();
 	bool isFullscreen();
