@@ -13,29 +13,29 @@
 struct MaterialProperties
 {
 #ifdef __cplusplus
-	MaterialProperties()
-		: diffuse(0)
-		, specular(0)
-		, ambient(0)
-		, emissive(0)
-		, transparent(0)
-		, opacity(1.0f)
-		, shininess(0)
-		, shininessStrength(1.0f)
-		, refractionIndex(1.0f)
-		, _padding(0)//Redundant
-	{ }
+    MaterialProperties()
+        : diffuse(0)
+        , specular(0)
+        , ambient(0)
+        , emissive(0)
+        , transparent(0)
+        , opacity(1.0f)
+        , shininess(0)
+        , shininessStrength(1.0f)
+        , refractionIndex(1.0f)
+        , _padding(0)//Redundant
+    { }
 #endif
-	vec3 diffuse;           //Diffuse color
-	float opacity;
-	vec3 specular;          //Specular color
-	float shininess;
-	vec3 ambient;           //Ambient color
-	float shininessStrength;
-	vec3 emissive;          //Emissive color (light emitted)
-	float refractionIndex;
-	vec3 transparent;       //Transparent color, multiplied with translucent light to construct final color
-	float _padding;
+    vec3 diffuse;           //Diffuse color
+    float opacity;
+    vec3 specular;          //Specular color
+    float shininess;
+    vec3 ambient;           //Ambient color
+    float shininessStrength;
+    vec3 emissive;          //Emissive color (light emitted)
+    float refractionIndex;
+    vec3 transparent;       //Transparent color, multiplied with translucent light to construct final color
+    float _padding;
 };
 
 #ifdef __cplusplus

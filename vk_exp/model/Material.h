@@ -103,10 +103,10 @@ public:
     void setRefractionIndex(const float refractionIndex) { this->properties.refractionIndex = refractionIndex; updatePropertiesUniform(); };
     
     void setWireframe(const bool isWireframe) { this->isWireframe = isWireframe; };
-	void setTwoSided(const bool twoSided) { this->faceCull = !twoSided; };
+    void setTwoSided(const bool twoSided) { this->faceCull = !twoSided; };
     void setShadingMode(const ShadingMode shaderMode) { this->shaderMode = shaderMode; };
-	void addTexture(std::shared_ptr<Image2D> texPtr, TextureType type = Diffuse);
-	void setDescriptorSet(vk::DescriptorSet descSet);
+    void addTexture(std::shared_ptr<Image2D> texPtr, TextureType type = Diffuse);
+    void setDescriptorSet(vk::DescriptorSet descSet);
 
     /**
      * @see glBlendFunc()
@@ -131,8 +131,8 @@ public:
 private:
     //Id
     std::string name;
-	vk::DescriptorSet m_descriptorSet = nullptr;
-	MaterialProperties properties;//?
+    vk::DescriptorSet m_descriptorSet = nullptr;
+    MaterialProperties properties;//?
     void updatePropertiesUniform();
     //Textures
     std::map<TextureType, std::vector<TextureFrame>> textures;
@@ -141,6 +141,6 @@ private:
     bool faceCull;
     ShadingMode shaderMode;
     //GLenum alphaBlendMode[2]; //GL_SRC_ALPHA, GL_ONE for additive blending//GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA for default
-	Context &m_context;
+    Context &m_context;
 };
 #endif //__Material_h__

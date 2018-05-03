@@ -12,52 +12,52 @@ class GraphicsPipeline;
 class Context;
 struct VFCcount
 {
-	VFCcount(int i = 1) :v(0), f(0), c(i), b(0){}
-	unsigned int v;
-	unsigned int f;
-	unsigned int c;
-	unsigned int b;
-	VFCcount &operator +=(const VFCcount &rhs)
-	{
-		v += rhs.v;
-		f += rhs.f;
-		c += rhs.c;
-		b += rhs.b;
-		return *this;
-	}
+    VFCcount(int i = 1) :v(0), f(0), c(i), b(0){}
+    unsigned int v;
+    unsigned int f;
+    unsigned int c;
+    unsigned int b;
+    VFCcount &operator +=(const VFCcount &rhs)
+    {
+        v += rhs.v;
+        f += rhs.f;
+        c += rhs.c;
+        b += rhs.b;
+        return *this;
+    }
 };
 
 struct ModelData
 {
-	ModelData(
-		Context &context,
-		size_t vertices,
-		size_t normals,
-		size_t colors,
-		size_t texcoords,
-		size_t bones,
-		size_t materials,
-		size_t faces,
-		size_t transforms
-	);
-	~ModelData();
-	Context &m_context;
-	//Vertex attributes
-	glm::vec3 *vertices;
-	glm::vec3 *normals;
-	glm::vec4 *colors;
-	glm::vec2 *texcoords;
+    ModelData(
+        Context &context,
+        size_t vertices,
+        size_t normals,
+        size_t colors,
+        size_t texcoords,
+        size_t bones,
+        size_t materials,
+        size_t faces,
+        size_t transforms
+    );
+    ~ModelData();
+    Context &m_context;
+    //Vertex attributes
+    glm::vec3 *vertices;
+    glm::vec3 *normals;
+    glm::vec4 *colors;
+    glm::vec2 *texcoords;
 
-	//Bones
-	Bone *bones;
+    //Bones
+    Bone *bones;
 
-	//Materials
+    //Materials
     std::shared_ptr<Material> *materials;
-	vk::DescriptorPool m_descriptorPool = nullptr;
-	std::vector<vk::DescriptorSet> m_descriptorSets;
+    vk::DescriptorPool m_descriptorPool = nullptr;
+    std::vector<vk::DescriptorSet> m_descriptorSets;
 
-	//Component attributes
-	unsigned int *faces;
+    //Component attributes
+    unsigned int *faces;
     glm::mat4 *transforms;
 
     //Sizes
@@ -73,18 +73,18 @@ struct ModelData
 class Model// : public Reloadable, public HasMatrices
 {
 public:
-	/**
-	*
-	*/
+    /**
+    *
+    */
     Model(Context &context, const char *modelPath, float scale = -1.0f);
-	~Model();
-	/**
-	* Reloads the model from file, rewriting GPU buffers
-	*/
-	void reload();
-	/**
-	 * Render to the specific commandbuffer with the named pipeline
-	 */
+    ~Model();
+    /**
+    * Reloads the model from file, rewriting GPU buffers
+    */
+    void reload();
+    /**
+     * Render to the specific commandbuffer with the named pipeline
+     */
     void render(vk::CommandBuffer &cb, GraphicsPipeline &pipeline);
 
     void setLocation(glm::vec3 location){ this->location = location; }
@@ -94,27 +94,27 @@ public:
     BoundingBox3D getBoundingBox() const { return boundingBox; }
 private:
     void updateBoundingBox();
-	std::shared_ptr<ModelNode> buildHierarchy(const struct aiScene* scene, const struct aiNode* nd, VFCcount &vfc, std::string* t_boneNames=nullptr) const;
-	unsigned int linkBones(std::shared_ptr<ModelNode> node, std::shared_ptr<ModelData> data, const std::string * const boneNames);
-	void loadModel();
-	void freeModel();
+    std::shared_ptr<ModelNode> buildHierarchy(const struct aiScene* scene, const struct aiNode* nd, VFCcount &vfc, std::string* t_boneNames=nullptr) const;
+    unsigned int linkBones(std::shared_ptr<ModelNode> node, std::shared_ptr<ModelData> data, const std::string * const boneNames);
+    void loadModel();
+    void freeModel();
 
-	std::vector<vk::VertexInputAttributeDescription> Model::AttributeDesc() const;
-	vk::VertexInputBindingDescription Model::BindingDesc() const;
+    std::vector<vk::VertexInputAttributeDescription> Model::AttributeDesc() const;
+    vk::VertexInputBindingDescription Model::BindingDesc() const;
 
     BoundingBox3D boundingBox;
 
-	std::shared_ptr<ModelNode> root;
-	std::shared_ptr<ModelData> data;
-	VFCcount vfc;
-	const char *modelPath;
+    std::shared_ptr<ModelNode> root;
+    std::shared_ptr<ModelData> data;
+    VFCcount vfc;
+    const char *modelPath;
     const float loadScale;//Scale that vertices are scaled to at model load
-	//VBOs
-	VertexBuffer *m_vertexBuffer;
-	IndexBuffer *m_indexBuffer;
-	glm::vec3 location;
-	glm::vec4 rotation;
-	Context &m_context;
+    //VBOs
+    VertexBuffer *m_vertexBuffer;
+    IndexBuffer *m_indexBuffer;
+    glm::vec3 location;
+    glm::vec4 rotation;
+    Context &m_context;
 };
 
 #endif //__Model_h__

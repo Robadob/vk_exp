@@ -17,34 +17,34 @@ class Context;
  */
 class PipelineLayout
 {
-	Context &m_context;
-	//Push constants are updated during the command buffer execution
-	void genPushConstants();
-	std::array<vk::PushConstantRange, 1> m_pushConstants;
-	//Descriptor sets are updated between command buffer executions, bound after pipeline
-	void genDescriptorSetLayouts();
-	std::array<vk::DescriptorSetLayout, 2> m_descriptorSetLayouts;//0:globals, 1:sampler
-	vk::PipelineLayout m_pipelineLayout;
-	vk::DescriptorSetLayoutBinding GlobalsUniformBufferBinding() const;
-	vk::DescriptorSetLayoutBinding TextureSamplerBinding() const;
+    Context &m_context;
+    //Push constants are updated during the command buffer execution
+    void genPushConstants();
+    std::array<vk::PushConstantRange, 1> m_pushConstants;
+    //Descriptor sets are updated between command buffer executions, bound after pipeline
+    void genDescriptorSetLayouts();
+    std::array<vk::DescriptorSetLayout, 2> m_descriptorSetLayouts;//0:globals, 1:sampler
+    vk::PipelineLayout m_pipelineLayout;
+    vk::DescriptorSetLayoutBinding GlobalsUniformBufferBinding() const;
+    vk::DescriptorSetLayoutBinding TextureSamplerBinding() const;
 public:
-	PipelineLayout(Context &context);
-	~PipelineLayout();
-	vk::PipelineLayout get() { return m_pipelineLayout; }
-	unsigned int pushConstantRangesSize() const { return (unsigned int)m_pushConstants.size(); }
-	unsigned int descriptorSetLayoutsSize() const { return (unsigned int)m_descriptorSetLayouts.size(); }
-	const vk::PushConstantRange *pushConstantRanges() const { return m_pushConstants.data(); }
-	const std::array<vk::DescriptorSetLayout, 2> descriptorSetLayouts() const { return m_descriptorSetLayouts; }
-	const vk::DescriptorSetLayout *globalsUniformBufferSetLayout() const { return &m_descriptorSetLayouts[0]; }
-	const vk::DescriptorSetLayout *textureSamplerSetLayout() const { return &m_descriptorSetLayouts[1]; }
+    PipelineLayout(Context &context);
+    ~PipelineLayout();
+    vk::PipelineLayout get() { return m_pipelineLayout; }
+    unsigned int pushConstantRangesSize() const { return (unsigned int)m_pushConstants.size(); }
+    unsigned int descriptorSetLayoutsSize() const { return (unsigned int)m_descriptorSetLayouts.size(); }
+    const vk::PushConstantRange *pushConstantRanges() const { return m_pushConstants.data(); }
+    const std::array<vk::DescriptorSetLayout, 2> descriptorSetLayouts() const { return m_descriptorSetLayouts; }
+    const vk::DescriptorSetLayout *globalsUniformBufferSetLayout() const { return &m_descriptorSetLayouts[0]; }
+    const vk::DescriptorSetLayout *textureSamplerSetLayout() const { return &m_descriptorSetLayouts[1]; }
 };
 //class PipelineLayoutFactory
 //{
-//	Context &m_context;
+//    Context &m_context;
 //public:
-//	PipelineLayoutFactory(Context &context);
-//	
-//	PipelineLayout make();
+//    PipelineLayoutFactory(Context &context);
+//    
+//    PipelineLayout make();
 //};
 
 #endif //__PipelineLayout_h__

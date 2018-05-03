@@ -7,11 +7,11 @@
 class Bone
 {
 public:
-	Bone(glm::mat4 om)
-		:offsetMatrix(om)
-	{ }
+    Bone(glm::mat4 om)
+        :offsetMatrix(om)
+    { }
 private:
-	glm::mat4 offsetMatrix;
+    glm::mat4 offsetMatrix;
     //struct VWPair
     //{
     //    unsigned int vertex;
